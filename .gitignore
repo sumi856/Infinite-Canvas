@@ -1,0 +1,7 @@
+﻿# Local Python runtime/dependency folders generated on this machine
+python/Lib/
+python/Scripts/
+
+# Local app/user data generated while running the canvas app
+data/canvases/
+data/projects.json

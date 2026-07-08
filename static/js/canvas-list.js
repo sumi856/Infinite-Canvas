@@ -63,6 +63,10 @@ const boardResetViewBtn = document.getElementById('boardResetView');
 const pasteCanvasBtn = document.getElementById('pasteCanvasBtn');
 const emptyCreateCanvasBtn = document.getElementById('emptyCreateCanvasBtn');
 const statusEl = document.getElementById('boardStatus');
+const canvasSearchWrap = document.getElementById('canvasSearchWrap');
+const canvasSearchInput = document.getElementById('canvasSearchInput');
+const canvasSearchClear = document.getElementById('canvasSearchClear');
+const canvasSearchResults = document.getElementById('canvasSearchResults');
 
 /* ===== State ===== */
 let projects = [];
@@ -71,7 +75,14 @@ let deletedCanvases = [];
 let currentProjectId = rememberedProjectId();
 let pendingDeleteProjectId = null;
 let statusTimer = null;
-let clipboardCanvasId = null;   // 剪切的画布（切到别的项目后粘贴）
+let clipboardCanvasId = null;   // cut canvas waiting to be pasted into another project
+let searchQuery = '';
+let searchMatches = [];
+let searchActiveIndex = -1;
+let searchActiveCanvasId = null;
+let searchLocatedOnce = false;
+let searchAllProjects = false;
+let searchPulseTimer = null;   // 剪切的画布（切到别的项目后粘贴）
 
 // board viewport (mirrors smart-canvas math)
 const viewport = { x: 0, y: 0, scale: 1 };
@@ -174,7 +185,7 @@ function onBoardWheel(e){
 
 /* ===== Data loading ===== */
 function currentProject(){ return projects.find(p => p.id === currentProjectId) || projects[0] || null; }
-function canvasesInProject(pid){ return canvases.filter(c => (c.project || 'default') === pid); }
+function canvasesInProject(pid){ return canvases.filter(c => canvasProjectId(c) === pid); }
 
 async function loadAll(){
     try {
@@ -374,6 +385,292 @@ function autoLayoutNulls(items){
     });
 }
 
+/* ===== Board helpers ===== */
+function updateBoardHeader(){
+    const p = currentProject();
+    if(boardProjectName) boardProjectName.textContent = (p && p.name) || L('默认项目','Default');
+    if(boardCanvasCount) boardCanvasCount.textContent = String(canvasesInProject(currentProjectId).length);
+}
+
+function autoLayoutNulls(items){
+    if(!Array.isArray(items) || !items.length) return;
+    const missing = items.filter(c => c && (c.board_x == null || c.board_y == null));
+    if(!missing.length) return;
+    const occupied = items.filter(c => c && c.board_x != null && c.board_y != null).length;
+    missing.forEach((c, idx) => {
+        const n = occupied + idx;
+        c.board_x = 80 + (n % 4) * 280;
+        c.board_y = 80 + Math.floor(n / 4) * 190;
+        if(typeof persistMeta === 'function'){
+            persistMeta(c.id, { board_x: Math.round(c.board_x), board_y: Math.round(c.board_y) });
+        }
+    });
+}
+
+/* ===== Canvas search / locate ===== */
+function updateCanvasSearchPlaceholders(){
+    if(!canvasSearchInput) return;
+    const label = L('搜索当前项目画布', 'Search canvases in this project');
+    canvasSearchInput.placeholder = label;
+    canvasSearchInput.setAttribute('aria-label', label);
+    if(canvasSearchClear){
+        const clearLabel = L('清空搜索', 'Clear search');
+        canvasSearchClear.title = clearLabel;
+        canvasSearchClear.setAttribute('aria-label', clearLabel);
+    }
+}
+
+function normalizeSearchText(value){
+    return String(value == null ? '' : value).toLocaleLowerCase().trim();
+}
+
+function fallbackProjectId(){
+    return (projects.find(p => p.id === 'default') || projects[0] || {}).id || 'default';
+}
+
+function projectNameById(pid){
+    const id = String(pid || '').trim() || fallbackProjectId();
+    return (projects.find(p => p.id === id) || projects.find(p => p.id === fallbackProjectId()) || {}).name || L('默认项目','Default');
+}
+
+function canvasProjectId(c){
+    const pid = String(c?.project || '').trim();
+    if(!projects.length) return pid || 'default';
+    return projects.some(p => p.id === pid) ? pid : fallbackProjectId();
+}
+
+function canvasKindSearchText(c){
+    const isSmart = (c.kind || 'classic') === 'smart';
+    return isSmart
+        ? '智能画布 智能 smart ai intelligent canvas'
+        : '普通画布 普通 classic normal canvas';
+}
+
+function canvasKindLabel(c){
+    return (c.kind || 'classic') === 'smart' ? L('智能画布','Smart') : L('普通画布','Classic');
+}
+
+function canvasSearchHaystack(c){
+    return normalizeSearchText([
+        c.title,
+        c.id,
+        projectNameById(canvasProjectId(c)),
+        canvasKindSearchText(c),
+        c.node_count != null ? String(c.node_count) : ''
+    ].join(' '));
+}
+
+function canvasMatchesTerms(c, terms){
+    const haystack = canvasSearchHaystack(c);
+    return terms.every(term => haystack.includes(term));
+}
+
+function setCanvasSearchResultsVisible(visible){
+    if(!canvasSearchResults || !canvasSearchWrap) return;
+    canvasSearchResults.hidden = !visible;
+    canvasSearchWrap.classList.toggle('open', !!visible);
+}
+
+function updateCanvasSearchClear(){
+    if(!canvasSearchClear) return;
+    canvasSearchClear.hidden = !canvasSearchInput || !canvasSearchInput.value.trim();
+}
+
+function renderCanvasSearchResults(){
+    if(!canvasSearchResults) return;
+    if(!searchQuery){
+        canvasSearchResults.innerHTML = '';
+        setCanvasSearchResultsVisible(false);
+        return;
+    }
+    const total = searchMatches.length;
+    const title = total
+        ? (searchAllProjects
+            ? L('当前项目无匹配，以下是其他项目中的结果（' + total + '）', 'No matches in this project; showing results in other projects (' + total + ')')
+            : L('当前项目找到 ' + total + ' 个画布', total + ' canvas' + (total === 1 ? '' : 'es') + ' found in this project'))
+        : (searchAllProjects
+            ? L('当前项目和其他项目都无匹配画布', 'No matches in this project or other projects')
+            : L('当前项目无匹配画布', 'No matches in this project'));
+    const rows = searchMatches.slice(0, 30).map((c, idx) => {
+        const isActive = idx === searchActiveIndex;
+        const pid = canvasProjectId(c);
+        const isOtherProject = pid !== currentProjectId;
+        const projectMeta = (searchAllProjects || isOtherProject)
+            ? '<span class="ws-canvas-search-project">' + escapeHtml(projectNameById(pid)) + '</span><span class="ws-card-meta-dot"></span>'
+            : '';
+        return '<button class="ws-canvas-search-result' + (isActive ? ' active' : '') + (isOtherProject ? ' other-project' : '') + '" type="button" data-index="' + idx + '" data-canvas-id="' + escapeAttr(c.id) + '">' +
+                '<span class="ws-canvas-search-result-main">' +
+                    '<span class="ws-canvas-search-result-title">' + escapeHtml(c.title || L('未命名画布','Untitled')) + '</span>' +
+                    '<span class="ws-canvas-search-result-meta">' + projectMeta + (c.node_count != null ? c.node_count : 0) + ' ' + L('节点','nodes') + '</span>' +
+                '</span>' +
+                '<span class="ws-canvas-search-kind ' + ((c.kind || 'classic') === 'smart' ? 'smart' : 'classic') + '">' + canvasKindLabel(c) + '</span>' +
+            '</button>';
+    }).join('');
+    const empty = '<div class="ws-canvas-search-empty">' +
+        '<div>' + (searchAllProjects
+            ? L('没有找到匹配画布。', 'No matching canvas found.')
+            : L('当前项目没有找到匹配画布。', 'No matching canvas in this project.')) + '</div>' +
+        '<div>' + L('试试输入画布名称、项目名称、“智能”或“普通”', 'Try a canvas name, project name, "smart", or "classic"') + '</div>' +
+    '</div>';
+    const more = total > 30 ? '<div class="ws-canvas-search-more">' + L('还有 ' + (total - 30) + ' 个结果，继续输入可缩小范围', (total - 30) + ' more results; keep typing to narrow') + '</div>' : '';
+    canvasSearchResults.innerHTML =
+        '<div class="ws-canvas-search-summary">' + title + '</div>' +
+        (rows || empty) +
+        more;
+    canvasSearchResults.querySelectorAll('.ws-canvas-search-result').forEach(btn => {
+        btn.onmousedown = e => e.preventDefault();
+        btn.onclick = () => {
+            const idx = Number(btn.dataset.index);
+            const c = searchMatches[idx];
+            if(!c) return;
+            searchActiveIndex = idx;
+            searchActiveCanvasId = c.id;
+            searchLocatedOnce = true;
+            locateCanvasById(c.id);
+            renderCanvasSearchResults();
+            setCanvasSearchResultsVisible(true);
+        };
+    });
+    setCanvasSearchResultsVisible(true);
+}
+
+function updateCanvasSearchHighlights(){
+    if(!boardWorld) return;
+    boardWorld.querySelectorAll('.ws-card.search-match,.ws-card.search-active').forEach(el => {
+        el.classList.remove('search-match', 'search-active');
+    });
+    if(!searchQuery || !searchMatches.length) return;
+    searchMatches.forEach(c => {
+        if(canvasProjectId(c) !== currentProjectId) return;
+        const card = boardWorld.querySelector('.ws-card[data-canvas-id="' + CSS.escape(c.id) + '"]');
+        if(card) card.classList.add('search-match');
+    });
+    const active = searchMatches[searchActiveIndex];
+    if(active && canvasProjectId(active) === currentProjectId){
+        const card = boardWorld.querySelector('.ws-card[data-canvas-id="' + CSS.escape(active.id) + '"]');
+        if(card) card.classList.add('search-active');
+    }
+}
+
+function updateCanvasSearch(suppressDropdown = false, opts = {}){
+    if(!canvasSearchInput) return;
+    const nextQuery = canvasSearchInput.value.trim();
+    const changed = nextQuery !== searchQuery;
+    if(changed){
+        searchActiveCanvasId = null;
+        searchActiveIndex = -1;
+        searchLocatedOnce = false;
+        if(!opts.keepScope) searchAllProjects = false;
+    }
+    searchQuery = nextQuery;
+    updateCanvasSearchClear();
+    if(!searchQuery){
+        searchMatches = [];
+        searchActiveIndex = -1;
+        searchActiveCanvasId = null;
+        searchAllProjects = false;
+        setCanvasSearchResultsVisible(false);
+        updateCanvasSearchHighlights();
+        return;
+    }
+    const terms = normalizeSearchText(searchQuery).split(/s+/).filter(Boolean);
+    const previousActiveId = searchActiveCanvasId;
+    const sortByRecent = (a, b) => Number(b.updated_at || b.created_at || 0) - Number(a.updated_at || a.created_at || 0);
+    const currentMatches = canvasesInProject(currentProjectId)
+        .filter(c => canvasMatchesTerms(c, terms))
+        .sort(sortByRecent);
+    if(currentMatches.length){
+        searchAllProjects = false;
+        searchMatches = currentMatches;
+    } else {
+        searchAllProjects = true;
+        searchMatches = canvases
+            .filter(c => canvasProjectId(c) !== currentProjectId && canvasMatchesTerms(c, terms))
+            .sort((a, b) => {
+                const projectCmp = projectNameById(canvasProjectId(a)).localeCompare(projectNameById(canvasProjectId(b)), langIsEn() ? 'en' : 'zh-CN');
+                return projectCmp || sortByRecent(a, b);
+            });
+    }
+    const activeIdx = previousActiveId ? searchMatches.findIndex(c => c.id === previousActiveId) : -1;
+    searchActiveIndex = activeIdx >= 0 ? activeIdx : (searchMatches.length ? 0 : -1);
+    searchActiveCanvasId = searchActiveIndex >= 0 ? searchMatches[searchActiveIndex].id : null;
+    renderCanvasSearchResults();
+    if(suppressDropdown) setCanvasSearchResultsVisible(false);
+    updateCanvasSearchHighlights();
+}
+
+function clearCanvasSearch(){
+    if(!canvasSearchInput) return;
+    canvasSearchInput.value = '';
+    searchQuery = '';
+    searchMatches = [];
+    searchActiveIndex = -1;
+    searchActiveCanvasId = null;
+    searchLocatedOnce = false;
+    searchAllProjects = false;
+    updateCanvasSearchClear();
+    setCanvasSearchResultsVisible(false);
+    updateCanvasSearchHighlights();
+}
+
+function locateCanvasById(id, opts = {}){
+    const c = canvases.find(x => x.id === id);
+    if(!c) return false;
+    const pid = canvasProjectId(c);
+    if(pid !== currentProjectId){
+        selectProject(pid);
+        setTimeout(() => locateCanvasById(id, opts), 0);
+        return true;
+    }
+    if(trashPanel?.classList.contains('active')) closeTrashView();
+    closeCreateCard();
+    setCanvasSearchResultsVisible(false);
+    setCanvasSearchResultsVisible(false);
+    closeCardMenu();
+    let card = boardWorld.querySelector('.ws-card[data-canvas-id="' + CSS.escape(id) + '"]');
+    if(!card){
+        renderBoard();
+        card = boardWorld.querySelector('.ws-card[data-canvas-id="' + CSS.escape(id) + '"]');
+    }
+    if(!card) return false;
+    const x = parseFloat(card.style.left) || 0;
+    const y = parseFloat(card.style.top) || 0;
+    const w = card.offsetWidth || 248;
+    const h = card.offsetHeight || 150;
+    viewport.scale = board.clientWidth < 640 ? 1 : Math.min(MAX_SCALE, Math.max(0.9, viewport.scale));
+    viewport.x = Math.round(board.clientWidth / 2 - (x + w / 2) * viewport.scale);
+    viewport.y = Math.round(board.clientHeight / 2 - (y + h / 2) * viewport.scale);
+    applyViewport();
+    searchActiveCanvasId = id;
+    searchActiveIndex = searchMatches.findIndex(item => item.id === id);
+    updateCanvasSearchHighlights();
+    card.classList.remove('search-pulse');
+    void card.offsetWidth;
+    card.classList.add('search-pulse');
+    clearTimeout(searchPulseTimer);
+    searchPulseTimer = setTimeout(() => card.classList.remove('search-pulse'), 1500);
+    if(!opts.silent) setStatus(L('已定位','Located') + ': ' + projectNameById(pid) + ' / ' + (c.title || L('未命名画布','Untitled')));
+    return true;
+}
+
+function stepCanvasSearch(direction){
+    if(!canvasSearchInput) return;
+    if(!searchQuery) updateCanvasSearch(false);
+    if(!searchMatches.length){
+        setStatus(searchAllProjects ? L('未找到匹配画布','No matching canvas found') : L('当前项目未找到匹配画布','No matching canvas in this project'));
+        renderCanvasSearchResults();
+        return;
+    }
+    const len = searchMatches.length;
+    if(searchActiveIndex < 0) searchActiveIndex = 0;
+    else if(searchLocatedOnce) searchActiveIndex = (searchActiveIndex + direction + len) % len;
+    searchLocatedOnce = true;
+    const c = searchMatches[searchActiveIndex];
+    searchActiveCanvasId = c.id;
+    locateCanvasById(c.id);
+    renderCanvasSearchResults();
+}
+
 function renderBoard(){
     updateBoardHeader();
     const items = canvasesInProject(currentProjectId);
@@ -382,6 +679,7 @@ function renderBoard(){
     items.forEach(c => boardWorld.appendChild(buildCard(c)));
     boardEmptyHint.classList.toggle('hidden', items.length > 0);
     updatePasteBtn();
+    updateCanvasSearch(true);
     refreshIcons();
 }
 
@@ -801,7 +1099,7 @@ async function pasteCanvas(){
     const targetPid = currentProjectId;
     clipboardCanvasId = null;
     if(!c){ updatePasteBtn(); renderBoard(); return; }
-    if((c.project || 'default') === targetPid){ renderBoard(); setStatus(L('已在当前项目','Already in this project')); return; }
+    if(canvasProjectId(c) === targetPid){ renderBoard(); setStatus(L('已在当前项目','Already in this project')); return; }
     await moveCanvasToProject(c.id, targetPid);
 }
 
@@ -1007,6 +1305,35 @@ newProjectInput.addEventListener('keydown', e => {
     if(e.key === 'Escape'){ e.preventDefault(); closeNewProject(); }
 });
 
+/* ===== Canvas search events ===== */
+if(canvasSearchInput){
+    updateCanvasSearchPlaceholders();
+    canvasSearchInput.addEventListener('input', () => updateCanvasSearch(false));
+    canvasSearchInput.addEventListener('focus', () => { if(canvasSearchInput.value.trim()) updateCanvasSearch(false); });
+    canvasSearchInput.addEventListener('keydown', e => {
+        if(e.key === 'Enter'){
+            e.preventDefault();
+            stepCanvasSearch(e.shiftKey ? -1 : 1);
+        } else if(e.key === 'ArrowDown'){
+            e.preventDefault();
+            searchLocatedOnce = true;
+            stepCanvasSearch(1);
+        } else if(e.key === 'ArrowUp'){
+            e.preventDefault();
+            searchLocatedOnce = true;
+            stepCanvasSearch(-1);
+        } else if(e.key === 'Escape'){
+            e.preventDefault();
+            if(canvasSearchInput.value.trim()) clearCanvasSearch();
+            else canvasSearchInput.blur();
+        }
+    });
+}
+canvasSearchClear?.addEventListener('click', () => {
+    clearCanvasSearch();
+    canvasSearchInput?.focus();
+});
+
 trashEntryBtn.addEventListener('click', () => {
     if(trashPanel.classList.contains('active')) closeTrashView();
     else openTrashView();
@@ -1015,6 +1342,9 @@ trashCloseBtn.addEventListener('click', closeTrashView);
 
 // close card menu when clicking outside
 document.addEventListener('mousedown', e => {
+    if(canvasSearchResults && !canvasSearchResults.hidden && !e.target.closest('.ws-canvas-search')){
+        setCanvasSearchResultsVisible(false);
+    }
     if(document.querySelector('.ws-card-pop') && !e.target.closest('.ws-card-pop') && !e.target.closest('.ws-card-menu')){
         closeCardMenu();
     }
@@ -1037,9 +1367,12 @@ window.addEventListener('message', event => {
     if(event.data?.type === 'studio-lang'){
         if(event.data.lang && window.StudioI18n) StudioI18n.set(event.data.lang);
         window.StudioI18n?.apply?.();
+updateCanvasSearchPlaceholders();
+        updateCanvasSearchPlaceholders();
         renderProjects();
         renderBoard();
         if(trashPanel.classList.contains('active')) renderTrash();
+        renderCanvasSearchResults();
         refreshIcons();
     }
 });

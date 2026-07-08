@@ -16,13 +16,13 @@
             } catch(e) {}
         })();
     </script>
-    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.07.6.1782696751"></script>
-    <script src="/static/vendor/js/lucide.js?v=2026.07.6.1782696749"></script>
-    <script src="/static/js/theme.js?v=2026.07.6.1783117645"></script>
-    <script src="/static/js/touch-mouse.js?v=2026.07.6.1783079819"></script>
-    <script src="/static/js/i18n.js?v=2026.07.6.1783116068"></script>
-    <link rel="stylesheet" href="/static/css/canvas-list.css?v=2026.07.6.1783079294">
-    <link rel="stylesheet" href="/static/css/theme.css?v=2026.07.6.1782696682">
+    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.07.8.1783537429"></script>
+    <script src="/static/vendor/js/lucide.js?v=2026.07.8.1783537429"></script>
+    <script src="/static/js/theme.js?v=2026.07.8.1783537429"></script>
+    <script src="/static/js/touch-mouse.js?v=2026.07.8.1783537429"></script>
+    <script src="/static/js/i18n.js?v=2026.07.8.1783537429"></script>
+    <link rel="stylesheet" href="/static/css/canvas-list.css?v=canvas-search-restore-1783537860005">
+    <link rel="stylesheet" href="/static/css/theme.css?v=2026.07.8.1783537428">
 </head>
 <body>
     <div id="workspace" class="workspace">
@@ -57,7 +57,13 @@
                     <span id="boardCanvasCount" class="ws-board-count">0</span>
                 </div>
                 <div class="ws-topbar-right">
-                    <button id="pasteCanvasBtn" class="ws-paste-btn" type="button" title="粘贴到此项目" style="display:none"><i data-lucide="clipboard-paste" class="w-4 h-4"></i><span>粘贴到此项目</span></button>
+                                        <div id="canvasSearchWrap" class="ws-canvas-search">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                        <input id="canvasSearchInput" class="ws-canvas-search-input" type="search" autocomplete="off" placeholder="搜索当前项目画布" aria-label="搜索当前项目画布">
+                        <button id="canvasSearchClear" class="ws-canvas-search-clear" type="button" title="清空搜索" aria-label="清空搜索" hidden><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+                        <div id="canvasSearchResults" class="ws-canvas-search-results" hidden></div>
+                    </div>
+<button id="pasteCanvasBtn" class="ws-paste-btn" type="button" title="粘贴到此项目" style="display:none"><i data-lucide="clipboard-paste" class="w-4 h-4"></i><span>粘贴到此项目</span></button>
                     <button id="boardResetView" class="ws-icon-btn" type="button" title="重置视图" aria-label="重置视图"><i data-lucide="locate-fixed" class="w-4 h-4"></i></button>
                     <button id="boardRefresh" class="ws-icon-btn" type="button" title="刷新" aria-label="刷新"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
                     <button id="newCanvasBtn" class="ws-primary-btn" type="button"><i data-lucide="plus" class="w-4 h-4"></i><span>新建画布</span></button>
@@ -90,6 +96,6 @@
             <div id="boardStatus" class="ws-status"></div>
         </main>
     </div>
-    <script src="/static/js/canvas-list.js?v=2026.07.6.1783077284"></script>
+    <script src="/static/js/canvas-list.js?v=canvas-search-restore-1783537860005"></script>
 </body>
 </html>
