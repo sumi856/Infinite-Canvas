@@ -10,7 +10,7 @@
         html.studio-route-booting body {
             visibility: hidden !important;
         }
-    </style>
+</style>
     <script>
         (function(){
             try {
@@ -23,11 +23,11 @@
             } catch(e) {}
         })();
     </script>
-    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.07.8.1783537429"></script>
-    <script src="/static/js/theme.js?v=2026.07.8.1783537429"></script>
-    <script src="/static/js/i18n.js?v=2026.07.8.1783537429"></script>
+    <script src="/static/vendor/js/tailwindcss-cdn.js?v=2026.07.6.1783332838"></script>
+    <script src="/static/js/theme.js?v=2026.07.6.1783332838"></script>
+    <script src="/static/js/i18n.js?v=2026.07.6.1783332838"></script>
     <style>
-        @import url('/static/vendor/css/fonts.css?v=2026.07.8.1783537429');
+        @import url('/static/vendor/css/fonts.css?v=2026.07.6.1783332838');
 
         /* 本地 Tailwind 工具类兜底：CDN 慢/未就绪时也能立刻给图标尺寸，避免首屏左侧栏空白 */
         .w-1\.5 { width: 0.375rem; }
@@ -716,6 +716,1616 @@
         /* 折叠态去除 gap，避免图标被推偏 */
         .side-pill { gap:0; }
         .sidebar:hover .side-pill { gap:8px; }
+
+
+/* --- sidebar settings UI restore patch start --- */
+        .sidebar:hover .nav-fold-toggle,
+        .sidebar.is-pinned .nav-fold-toggle {
+            background: var(--nav-hover-bg);
+            border-color: var(--border);
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+            margin-bottom: 0;
+        }
+
+        .sidebar:hover .nav-fold-group:not(.is-collapsed),
+        .sidebar.is-pinned .nav-fold-group:not(.is-collapsed) {
+            width: 190px;
+            align-items: center;
+            position: relative;
+            padding: 6px 0 8px;
+            margin: 0 0 8px;
+            gap: 6px;
+            border: 1px solid var(--border);
+            border-top: 0;
+            border-radius: 0 0 18px 18px;
+            background: color-mix(in srgb, var(--nav-hover-bg) 54%, transparent);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.22);
+        }
+
+        .sidebar:hover .nav-fold-group:not(.is-collapsed)::before,
+        .sidebar.is-pinned .nav-fold-group:not(.is-collapsed)::before,
+        .sidebar:hover .settings-fold-group:not(.is-collapsed)::before,
+        .sidebar.is-pinned .settings-fold-group:not(.is-collapsed)::before {
+            content: none;
+        }
+
+        .sidebar:hover .nav-fold-group .nav-item,
+        .sidebar.is-pinned .nav-fold-group .nav-item {
+            width: 176px;
+            height: 38px;
+            flex-basis: 38px;
+            margin: 2px 0;
+            border-radius: 14px;
+            padding-left: 14px;
+        }
+
+        .sidebar:hover .nav-fold-group .nav-text,
+        .sidebar.is-pinned .nav-fold-group .nav-text {
+            margin-left: 13px;
+            font-size: 13px;
+        }
+
+        .settings-fold-toggle {
+            color: var(--muted);
+        }
+
+        .settings-fold-toggle[aria-expanded=true] {
+            background: var(--nav-hover-bg);
+            color: var(--text);
+            border-color: var(--stage-border);
+        }
+
+        .sidebar:hover .settings-fold-toggle[aria-expanded=true],
+        .sidebar.is-pinned .settings-fold-toggle[aria-expanded=true] {
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+            margin-bottom: 0;
+        }
+
+        .settings-fold-group {
+            position: relative;
+        }
+
+        .settings-fold-group:not(.is-collapsed) {
+            max-height: 260px !important;
+        }
+
+        .sidebar:hover .settings-fold-group:not(.is-collapsed),
+        .sidebar.is-pinned .settings-fold-group:not(.is-collapsed) {
+            width: 170px;
+            align-items: center;
+            padding: 6px 0 8px;
+            margin: 0 0 2px;
+            gap: 6px;
+            border: 1px solid var(--border);
+            border-top: 0;
+            border-radius: 0 0 16px 16px;
+            background: color-mix(in srgb, var(--nav-hover-bg) 54%, transparent);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.22);
+        }
+
+        .settings-pref-row {
+            width: 44px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            min-width: 0;
+        }
+
+        .sidebar:hover .settings-pref-row,
+        .sidebar.is-pinned .settings-pref-row {
+            width: 154px;
+            flex-direction: row;
+            align-items: stretch;
+            gap: 6px;
+        }
+
+        .settings-pref-btn {
+            width: 44px;
+            height: 30px;
+            flex: 0 0 30px;
+            border-radius: 999px;
+            padding: 0 9px;
+            gap: 4px !important;
+        }
+
+        .sidebar:hover .settings-pref-btn,
+        .sidebar.is-pinned .settings-pref-btn {
+            width: auto !important;
+            height: 32px;
+            flex: 1 1 0;
+            min-width: 0;
+        }
+
+        .settings-pref-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .settings-pref-btn .side-pill-text,
+        .sidebar:hover .settings-pref-btn .side-pill-text,
+        .sidebar.is-pinned .settings-pref-btn .side-pill-text {
+            opacity: 1;
+            max-width: 62px;
+            font-size: 11px;
+            font-weight: 850;
+            transition-delay: 0s;
+        }
+
+        .settings-lang-flag {
+            flex: 0 0 auto;
+            width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        .settings-mini-divider {
+            display: none;
+        }
+
+        .sidebar:hover .settings-mini-divider,
+        .sidebar.is-pinned .settings-mini-divider {
+            display: block;
+            width: 154px;
+            height: 1px;
+            margin: 1px 0;
+            background: color-mix(in srgb, var(--border) 76%, transparent);
+        }
+
+        .settings-child-pill {
+            height: 32px;
+            flex-basis: 32px;
+            border-radius: 12px;
+        }
+
+        .sidebar:hover .settings-child-pill,
+        .sidebar.is-pinned .settings-child-pill {
+            width: 154px;
+            height: 34px;
+            flex-basis: 34px;
+            justify-content: flex-start;
+            padding: 0 10px;
+            gap: 8px;
+            border-radius: 13px;
+        }
+
+        .settings-child-pill svg {
+            width: 15px;
+            height: 15px;
+        }
+
+        .settings-child-pill .side-pill-text {
+            font-size: 12px;
+        }
+
+        .settings-child-pill.active {
+            background: var(--text);
+            color: var(--bg);
+            border-color: var(--text);
+        }
+
+        html.theme-dark .settings-child-pill.active,
+        body.theme-dark .settings-child-pill.active {
+            background: #f1f5f9;
+            color: #0f172a;
+            border-color: #f1f5f9;
+        }
+
+        .sidebar:not(:hover):not(.is-pinned) .settings-pref-btn .side-pill-text,
+        .sidebar:not(:hover):not(.is-pinned) .settings-child-pill .side-pill-text {
+            max-width: 0;
+            opacity: 0;
+        }
+
+        @media (max-height: 720px) {
+            .settings-fold-group:not(.is-collapsed) { max-height: 244px !important; }
+            .settings-child-pill { height: 30px; flex-basis: 30px; }
+            .settings-pref-btn { height: 28px; flex-basis: 28px; }
+            .sidebar:hover .nav-fold-group .nav-item,
+            .sidebar.is-pinned .nav-fold-group .nav-item { height: 36px; flex-basis: 36px; margin: 1px 0; }
+            .sidebar:hover .settings-child-pill,
+            .sidebar.is-pinned .settings-child-pill { height: 32px; flex-basis: 32px; }
+        }
+        /* --- sidebar settings UI restore patch end --- */
+
+/* --- V16 sidebar final implementation start --- */
+        :root {
+            --sidebar-card-border: color-mix(in srgb, var(--border) 72%, var(--text) 8%);
+            --sidebar-card-bg: color-mix(in srgb, var(--sidebar-bg) 86%, var(--nav-hover-bg));
+            --sidebar-card-hover-bg: color-mix(in srgb, var(--sidebar-bg) 72%, var(--nav-hover-bg));
+            --sidebar-soft-shadow: inset 0 1px 0 rgba(255,255,255,.42);
+        }
+
+        html.theme-dark,
+        body.theme-dark {
+            --sidebar-card-border: rgba(148, 163, 184, .22);
+            --sidebar-card-bg: rgba(255,255,255,.025);
+            --sidebar-card-hover-bg: rgba(255,255,255,.065);
+            --sidebar-soft-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+        }
+
+        .sidebar nav { gap: 9px; }
+
+        .sidebar-divider {
+            width: 32px;
+            height: 1px;
+            background: var(--border);
+            margin: 2px auto;
+            opacity: 0;
+            transition: width .22s var(--fluid-ease), opacity .18s ease, background-color .18s ease;
+        }
+
+        .sidebar:hover .sidebar-divider,
+        .sidebar.is-pinned .sidebar-divider {
+            width: 164px;
+            opacity: 1;
+        }
+
+        .nav-item,
+        .nav-fold-toggle {
+            width: 52px;
+            height: 50px;
+            flex-basis: 50px;
+            margin: 0;
+            padding-left: 15px;
+            border-radius: 18px;
+            gap: 0;
+            letter-spacing: .035em;
+        }
+
+        .nav-item {
+            border: 1px solid var(--sidebar-card-border);
+            background: var(--sidebar-card-bg);
+            box-shadow: var(--sidebar-soft-shadow);
+            transition: width 0.3s var(--fluid-ease) 0.5s, background-color .16s, color .16s, border-color .16s, box-shadow .16s;
+        }
+
+        .sidebar:hover .nav-item,
+        .sidebar.is-pinned .nav-item,
+        .sidebar:hover .nav-fold-toggle,
+        .sidebar.is-pinned .nav-fold-toggle {
+            width: 190px;
+            transition-delay: 0s;
+        }
+
+        .nav-item:hover,
+        .nav-fold-toggle:hover {
+            background: var(--sidebar-card-hover-bg);
+            color: var(--text);
+            border-color: var(--stage-border);
+        }
+
+        .nav-item.active {
+            border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 10px 22px rgba(15,23,42,.08);
+        }
+
+        html.theme-dark .nav-item.active,
+        body.theme-dark .nav-item.active {
+            background: #f8fafc;
+            color: #111827;
+            border-color: rgba(248,250,252,.72);
+            box-shadow: 0 10px 22px rgba(0,0,0,.22);
+        }
+
+        .nav-item svg,
+        .nav-fold-toggle > svg:first-child { flex: 0 0 auto; }
+
+        .nav-text {
+            margin-left: 16px;
+            font-weight: 800;
+            letter-spacing: .035em;
+        }
+
+        .nav-fold-toggle {
+            color: var(--text);
+            border: 1px solid var(--sidebar-card-border);
+            background: var(--sidebar-card-bg);
+            box-shadow: var(--sidebar-soft-shadow);
+        }
+
+        .nav-fold-toggle .nav-text { margin-left: 16px; }
+        .nav-fold-toggle[aria-expanded="false"] .nav-fold-icon { transform: rotate(-90deg); }
+
+        .nav-fold-group {
+            max-height: 340px;
+            transition: max-height .24s var(--fluid-ease), opacity .16s ease, padding .22s var(--fluid-ease), border-color .22s ease;
+        }
+
+        .sidebar:hover .nav-fold-group:not(.is-collapsed),
+        .sidebar.is-pinned .nav-fold-group:not(.is-collapsed) {
+            width: 190px;
+            padding: 8px 8px 9px;
+            margin: -9px 0 0;
+            gap: 6px;
+            border: 1px solid var(--sidebar-card-border);
+            border-top: 0;
+            border-radius: 0 0 18px 18px;
+            background: var(--sidebar-card-bg);
+            box-shadow: var(--sidebar-soft-shadow);
+        }
+
+        .sidebar:hover .nav-fold-toggle[aria-expanded="true"],
+        .sidebar.is-pinned .nav-fold-toggle[aria-expanded="true"] {
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+            margin-bottom: 0;
+        }
+
+        .sidebar:hover .nav-fold-group .nav-item,
+        .sidebar.is-pinned .nav-fold-group .nav-item {
+            width: 172px;
+            height: 38px;
+            flex-basis: 38px;
+            margin: 0;
+            padding-left: 10px;
+            border-radius: 12px;
+            border-color: transparent;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .sidebar:hover .nav-fold-group .nav-item:hover,
+        .sidebar.is-pinned .nav-fold-group .nav-item:hover {
+            background: var(--nav-hover-bg);
+            color: var(--text);
+        }
+
+        .sidebar:hover .nav-fold-group .nav-item.active,
+        .sidebar.is-pinned .nav-fold-group .nav-item.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+            box-shadow: 0 8px 18px rgba(15,23,42,.08);
+        }
+
+        html.theme-dark .sidebar:hover .nav-fold-group .nav-item.active,
+        body.theme-dark .sidebar:hover .nav-fold-group .nav-item.active,
+        html.theme-dark .sidebar.is-pinned .nav-fold-group .nav-item.active,
+        body.theme-dark .sidebar.is-pinned .nav-fold-group .nav-item.active {
+            background: #f8fafc;
+            color: #111827;
+            border-color: #f8fafc;
+        }
+
+        .sidebar:hover .nav-fold-group .nav-text,
+        .sidebar.is-pinned .nav-fold-group .nav-text {
+            margin-left: 12px;
+            font-size: 13px;
+            letter-spacing: .025em;
+        }
+
+        .settings-fold-toggle {
+            border-color: var(--sidebar-card-border);
+            background: transparent;
+            color: var(--muted);
+            box-shadow: none;
+        }
+
+        .settings-fold-toggle[aria-expanded=true] {
+            background: var(--sidebar-card-bg);
+            color: var(--text);
+            border-color: var(--sidebar-card-border);
+        }
+
+        .sidebar:hover .settings-fold-toggle[aria-expanded=true],
+        .sidebar.is-pinned .settings-fold-toggle[aria-expanded=true] {
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+            margin-bottom: 0;
+        }
+
+        .settings-fold-group:not(.is-collapsed) { max-height: 270px !important; }
+
+        .sidebar:hover .settings-fold-group:not(.is-collapsed),
+        .sidebar.is-pinned .settings-fold-group:not(.is-collapsed) {
+            width: 170px;
+            align-items: center;
+            padding: 5px 0 7px;
+            margin: 0 0 2px;
+            gap: 5px;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .settings-pref-row {
+            width: 44px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            min-width: 0;
+        }
+
+        .sidebar:hover .settings-pref-row,
+        .sidebar.is-pinned .settings-pref-row {
+            width: 154px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            align-items: stretch;
+        }
+
+        .settings-pref-btn {
+            width: 44px;
+            height: 30px;
+            flex: 0 0 30px;
+            border-radius: 999px;
+            padding: 0 9px;
+            gap: 4px !important;
+            border-color: var(--sidebar-card-border);
+            background: rgba(255,255,255,.34);
+        }
+
+        html.theme-dark .settings-pref-btn,
+        body.theme-dark .settings-pref-btn {
+            background: rgba(255,255,255,.028);
+            border-color: rgba(148,163,184,.22);
+            color: #d7deea;
+        }
+
+        .sidebar:hover .settings-pref-btn,
+        .sidebar.is-pinned .settings-pref-btn {
+            width: auto !important;
+            height: 34px;
+            flex: 1 1 0;
+            min-width: 0;
+            border-radius: 12px;
+        }
+
+        .settings-pref-btn:hover {
+            background: var(--sidebar-card-hover-bg);
+            border-color: var(--stage-border);
+            color: var(--text);
+        }
+
+        html.theme-dark .settings-pref-btn:hover,
+        body.theme-dark .settings-pref-btn:hover {
+            background: rgba(255,255,255,.075);
+            border-color: rgba(203,213,225,.38);
+            color: #f8fafc;
+        }
+
+        .settings-pref-btn svg,
+        .settings-pref-btn .settings-theme-icon {
+            width: 14px;
+            height: 14px;
+            flex: 0 0 auto;
+        }
+
+        .settings-pref-btn .settings-theme-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        .settings-pref-btn .side-pill-text,
+        .sidebar:hover .settings-pref-btn .side-pill-text,
+        .sidebar.is-pinned .settings-pref-btn .side-pill-text {
+            opacity: 1;
+            max-width: 62px;
+            font-size: 11px;
+            font-weight: 900;
+            transition-delay: 0s;
+        }
+
+        .settings-pref-btn[data-tip]:hover::after {
+            content: attr(data-tip);
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 8px);
+            transform: translateX(-50%);
+            white-space: nowrap;
+            background: var(--text);
+            color: var(--bg);
+            font-size: 11px;
+            font-weight: 800;
+            padding: 6px 8px;
+            border-radius: 9px;
+            box-shadow: 0 12px 30px rgba(15,23,42,.14);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .settings-mini-divider { display: none !important; }
+
+        .sidebar:hover .settings-mini-divider,
+        .sidebar.is-pinned .settings-mini-divider {
+            display: block !important;
+            width: 154px;
+            height: 1px;
+            margin: 1px 0;
+            background: color-mix(in srgb, var(--border) 76%, transparent);
+        }
+
+        .settings-child-pill {
+            height: 32px;
+            flex-basis: 32px;
+            border-radius: 12px;
+            border-color: transparent;
+            background: transparent;
+        }
+
+        .sidebar:hover .settings-child-pill,
+        .sidebar.is-pinned .settings-child-pill {
+            width: 154px;
+            height: 34px;
+            flex-basis: 34px;
+            justify-content: flex-start;
+            padding: 0 10px;
+            gap: 8px;
+            border-radius: 13px;
+        }
+
+        .settings-child-pill:hover {
+            background: var(--nav-hover-bg);
+            border-color: transparent;
+            color: var(--text);
+        }
+
+        .settings-child-pill.active {
+            background: var(--text);
+            color: var(--bg);
+            border-color: var(--text);
+        }
+
+        html.theme-dark .settings-child-pill.active,
+        body.theme-dark .settings-child-pill.active {
+            background: #f1f5f9;
+            color: #0f172a;
+            border-color: #f1f5f9;
+        }
+
+        .project-version-badge,
+        .update-now-btn {
+            border-color: var(--sidebar-card-border);
+            background: var(--sidebar-card-bg);
+            color: var(--muted);
+        }
+
+        .project-version-badge:hover {
+            color: var(--text);
+            background: var(--sidebar-card-hover-bg);
+            border-color: var(--stage-border);
+        }
+
+        .update-now-btn.show {
+            border-color: rgba(34,197,94,.42);
+            background: rgba(34,197,94,.10);
+            color: #16a34a;
+        }
+
+        .author-box:hover { background: transparent; }
+        .author-name-lite { font-weight: 900; }
+
+        .social-icon-lite {
+            width: 18px;
+            height: 18px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: color .15s, transform .15s, background-color .15s;
+        }
+
+        .social-icon-lite:hover {
+            background: var(--nav-hover-bg);
+            color: var(--text);
+            transform: translateY(-1px);
+        }
+
+        html.theme-dark .social-icon-lite:hover,
+        body.theme-dark .social-icon-lite:hover {
+            background: rgba(255,255,255,.10);
+            color: #f8fafc;
+        }
+
+        .sidebar:not(:hover):not(.is-pinned) .nav-fold-group { display: none; }
+
+        .sidebar.is-pinned .settings-pref-btn .side-pill-text,
+        .sidebar.is-pinned .settings-child-pill .side-pill-text { opacity: 1; }
+
+
+        /* V16 settings runtime alignment: keep settings close to the accepted V16 accordion preview */
+        .side-actions {
+            gap: 8px;
+            align-items: center;
+        }
+
+        .settings-accordion {
+            width: 52px;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            border: 1px solid var(--sidebar-card-border);
+            border-radius: 18px;
+            background: var(--sidebar-card-bg);
+            box-shadow: var(--sidebar-soft-shadow);
+            overflow: hidden;
+            transition: width .3s var(--fluid-ease) .5s, background-color .16s, border-color .16s, box-shadow .16s;
+            flex: 0 0 auto;
+        }
+
+        .sidebar:hover .settings-accordion,
+        .sidebar.is-pinned .settings-accordion {
+            width: 170px;
+            transition-delay: 0s;
+        }
+
+        .settings-accordion:hover,
+        .settings-accordion:has(.settings-fold-group:not(.is-collapsed)) {
+            background: var(--sidebar-card-hover-bg);
+            border-color: var(--stage-border);
+        }
+
+        html.theme-dark .settings-accordion,
+        body.theme-dark .settings-accordion {
+            background: rgba(255,255,255,.025);
+            border-color: rgba(148,163,184,.22);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+        }
+
+        html.theme-dark .settings-accordion:hover,
+        body.theme-dark .settings-accordion:hover,
+        html.theme-dark .settings-accordion:has(.settings-fold-group:not(.is-collapsed)),
+        body.theme-dark .settings-accordion:has(.settings-fold-group:not(.is-collapsed)) {
+            background: rgba(255,255,255,.055);
+            border-color: rgba(203,213,225,.34);
+        }
+
+        .settings-accordion .settings-fold-toggle,
+        .settings-accordion .settings-fold-toggle[aria-expanded=true],
+        .sidebar:hover .settings-accordion .settings-fold-toggle,
+        .sidebar.is-pinned .settings-accordion .settings-fold-toggle,
+        .sidebar:hover .settings-accordion .settings-fold-toggle[aria-expanded=true],
+        .sidebar.is-pinned .settings-accordion .settings-fold-toggle[aria-expanded=true] {
+            width: 100% !important;
+            height: 50px;
+            flex-basis: 50px;
+            min-height: 50px;
+            box-sizing: border-box;
+            padding: 0 15px;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+            color: var(--text);
+            justify-content: flex-start;
+            overflow: hidden;
+        }
+
+        .settings-accordion .settings-fold-toggle:hover {
+            background: transparent;
+            color: var(--text);
+        }
+
+        .settings-fold-toggle > svg:first-child {
+            width: 20px;
+            height: 20px;
+            flex: 0 0 20px;
+        }
+
+        .sidebar:hover .settings-fold-toggle,
+        .sidebar.is-pinned .settings-fold-toggle {
+            gap: 16px;
+        }
+
+        .settings-fold-toggle .side-pill-text {
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: .035em;
+        }
+
+        .sidebar:hover .settings-fold-toggle .side-pill-text,
+        .sidebar.is-pinned .settings-fold-toggle .side-pill-text {
+            opacity: 1;
+            max-width: 84px;
+            transition-delay: .08s;
+        }
+
+        .settings-fold-toggle .settings-fold-chevron {
+            width: 14px !important;
+            height: 14px !important;
+            flex: 0 0 auto;
+            margin-left: auto;
+            opacity: 0;
+            max-width: 0;
+            overflow: hidden;
+            transform: translateX(6px);
+            transition: opacity .18s ease, max-width .18s ease, transform .22s var(--fluid-ease);
+        }
+
+        .sidebar:hover .settings-fold-toggle .settings-fold-chevron,
+        .sidebar.is-pinned .settings-fold-toggle .settings-fold-chevron {
+            opacity: .72;
+            max-width: 16px;
+            transform: translateX(0);
+            transition-delay: .08s, .08s, 0s;
+        }
+
+        .settings-fold-toggle[aria-expanded="true"] .settings-fold-chevron {
+            transform: translateX(0) rotate(180deg);
+        }
+
+        .settings-accordion .settings-fold-group {
+            width: 100%;
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 5px;
+            padding: 0 8px;
+            pointer-events: none;
+            border: 0;
+            background: transparent;
+            box-shadow: none;
+            transition: max-height .24s var(--fluid-ease), opacity .16s ease, padding .22s var(--fluid-ease);
+        }
+
+        .settings-accordion .settings-fold-group:not(.is-collapsed),
+        .sidebar:hover .settings-accordion .settings-fold-group:not(.is-collapsed),
+        .sidebar.is-pinned .settings-accordion .settings-fold-group:not(.is-collapsed) {
+            width: 100%;
+            max-height: 270px !important;
+            opacity: 1;
+            padding: 4px 8px 9px;
+            margin: 0;
+            gap: 5px;
+            pointer-events: auto;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+            align-items: stretch;
+        }
+
+        .sidebar:not(:hover):not(.is-pinned) .settings-fold-group {
+            display: none;
+        }
+
+        .settings-pref-row,
+        .sidebar:hover .settings-pref-row,
+        .sidebar.is-pinned .settings-pref-row {
+            width: 100%;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 6px;
+            align-items: stretch;
+            min-width: 0;
+        }
+
+        .settings-pref-btn,
+        .sidebar:hover .settings-pref-btn,
+        .sidebar.is-pinned .settings-pref-btn {
+            width: 100% !important;
+            height: 34px;
+            flex: 0 0 34px;
+            min-width: 0;
+            padding: 0 8px;
+            border-radius: 12px;
+            border: 1px solid var(--sidebar-card-border);
+            background: rgba(255,255,255,.34);
+            color: var(--muted);
+            justify-content: center;
+            gap: 6px !important;
+            box-shadow: none;
+        }
+
+        .settings-pref-btn:hover {
+            background: var(--sidebar-bg);
+            border-color: var(--stage-border);
+            color: var(--text);
+        }
+
+        html.theme-dark .settings-pref-btn,
+        body.theme-dark .settings-pref-btn {
+            background: rgba(255,255,255,.028);
+            border-color: rgba(148,163,184,.22);
+            color: #d7deea;
+        }
+
+        html.theme-dark .settings-pref-btn:hover,
+        body.theme-dark .settings-pref-btn:hover {
+            background: rgba(255,255,255,.075);
+            border-color: rgba(203,213,225,.38);
+            color: #f8fafc;
+        }
+
+        .settings-pref-btn .settings-theme-icon,
+        .settings-pref-btn .settings-lang-flag {
+            width: 15px;
+            height: 15px;
+            flex: 0 0 auto;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        .settings-pref-btn .side-pill-text,
+        .sidebar:hover .settings-pref-btn .side-pill-text,
+        .sidebar.is-pinned .settings-pref-btn .side-pill-text {
+            opacity: 1;
+            max-width: 58px;
+            min-width: 0;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: .02em;
+            text-overflow: ellipsis;
+            transition-delay: 0s;
+        }
+
+        .settings-mini-divider,
+        .sidebar:hover .settings-mini-divider,
+        .sidebar.is-pinned .settings-mini-divider {
+            display: block !important;
+            width: calc(100% - 16px);
+            height: 1px;
+            margin: 1px 8px;
+            background: color-mix(in srgb, var(--border) 78%, transparent);
+            opacity: .78;
+        }
+
+        .settings-child-pill,
+        .sidebar:hover .settings-child-pill,
+        .sidebar.is-pinned .settings-child-pill {
+            width: 100% !important;
+            height: 38px;
+            flex-basis: 38px;
+            min-height: 38px;
+            justify-content: flex-start;
+            padding: 0 10px;
+            gap: 12px;
+            border-radius: 12px;
+            border-color: transparent;
+            background: transparent;
+            box-shadow: none;
+            color: var(--muted);
+        }
+
+        .settings-child-pill svg {
+            width: 18px;
+            height: 18px;
+            flex: 0 0 18px;
+        }
+
+        .settings-child-pill .side-pill-text,
+        .sidebar:hover .settings-child-pill .side-pill-text,
+        .sidebar.is-pinned .settings-child-pill .side-pill-text {
+            opacity: 1;
+            max-width: 112px;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: .025em;
+            transition-delay: 0s;
+        }
+
+        .settings-child-pill:hover {
+            background: var(--nav-hover-bg);
+            border-color: transparent;
+            color: var(--text);
+        }
+
+        .settings-child-pill.active {
+            background: var(--text);
+            color: var(--bg);
+            border-color: var(--text);
+            box-shadow: 0 8px 18px rgba(15,23,42,.08);
+        }
+
+        html.theme-dark .settings-child-pill.active,
+        body.theme-dark .settings-child-pill.active {
+            background: #f1f5f9;
+            color: #0f172a;
+            border-color: #f1f5f9;
+        }
+
+
+        /* V16 visual parity refinement: settings/home/version match main menu geometry */
+        :root {
+            --sidebar-main-width: 190px;
+            --sidebar-main-closed-width: 52px;
+            --sidebar-main-height: 50px;
+        }
+
+        .nav-item {
+            color: var(--text);
+        }
+
+        .nav-item:not(.active) .nav-text {
+            color: inherit;
+        }
+
+        .settings-accordion {
+            width: var(--sidebar-main-closed-width);
+            border-color: var(--sidebar-card-border);
+            background: var(--sidebar-card-bg);
+            box-shadow: var(--sidebar-soft-shadow);
+        }
+
+        .sidebar:hover .settings-accordion,
+        .sidebar.is-pinned .settings-accordion {
+            width: var(--sidebar-main-width);
+        }
+
+        .settings-accordion:hover,
+        .settings-accordion:has(.settings-fold-group:not(.is-collapsed)) {
+            background: var(--sidebar-card-bg);
+            border-color: var(--sidebar-card-border);
+        }
+
+        .settings-accordion .settings-fold-toggle,
+        .settings-accordion .settings-fold-toggle[aria-expanded=true],
+        .sidebar:hover .settings-accordion .settings-fold-toggle,
+        .sidebar.is-pinned .settings-accordion .settings-fold-toggle,
+        .sidebar:hover .settings-accordion .settings-fold-toggle[aria-expanded=true],
+        .sidebar.is-pinned .settings-accordion .settings-fold-toggle[aria-expanded=true] {
+            height: var(--sidebar-main-height);
+            flex-basis: var(--sidebar-main-height);
+            min-height: var(--sidebar-main-height);
+            padding: 0 15px;
+            color: var(--text);
+            background: transparent;
+        }
+
+        .settings-accordion .settings-fold-toggle:hover {
+            background: var(--sidebar-card-hover-bg);
+        }
+
+        .settings-fold-toggle[aria-expanded="false"] .settings-fold-chevron {
+            transform: translateX(6px) rotate(-90deg);
+        }
+
+        .sidebar:hover .settings-fold-toggle[aria-expanded="false"] .settings-fold-chevron,
+        .sidebar.is-pinned .settings-fold-toggle[aria-expanded="false"] .settings-fold-chevron {
+            transform: translateX(0) rotate(-90deg);
+        }
+
+        .settings-fold-toggle[aria-expanded="true"] .settings-fold-chevron,
+        .sidebar:hover .settings-fold-toggle[aria-expanded="true"] .settings-fold-chevron,
+        .sidebar.is-pinned .settings-fold-toggle[aria-expanded="true"] .settings-fold-chevron {
+            transform: translateX(0) rotate(0deg);
+        }
+
+        html.theme-dark .settings-accordion,
+        body.theme-dark .settings-accordion,
+        html.theme-dark .settings-accordion:hover,
+        body.theme-dark .settings-accordion:hover,
+        html.theme-dark .settings-accordion:has(.settings-fold-group:not(.is-collapsed)),
+        body.theme-dark .settings-accordion:has(.settings-fold-group:not(.is-collapsed)) {
+            background: var(--sidebar-card-bg);
+            border-color: var(--sidebar-card-border);
+        }
+
+        html.theme-dark .settings-pref-btn,
+        body.theme-dark .settings-pref-btn,
+        html.theme-dark .sidebar:hover .settings-pref-btn,
+        body.theme-dark .sidebar:hover .settings-pref-btn,
+        html.theme-dark .sidebar.is-pinned .settings-pref-btn,
+        body.theme-dark .sidebar.is-pinned .settings-pref-btn {
+            background: rgba(255,255,255,.012);
+            border-color: rgba(148,163,184,.18);
+            color: #e2e8f0;
+        }
+
+        html.theme-dark .settings-pref-btn:hover,
+        body.theme-dark .settings-pref-btn:hover {
+            background: rgba(255,255,255,.055);
+            border-color: rgba(203,213,225,.34);
+            color: #f8fafc;
+        }
+
+        #github-entry-btn.side-pill,
+        .sidebar:hover #github-entry-btn.side-pill,
+        .sidebar.is-pinned #github-entry-btn.side-pill {
+            height: var(--sidebar-main-height);
+            flex-basis: var(--sidebar-main-height);
+            min-height: var(--sidebar-main-height);
+            border-radius: 18px;
+            border-color: var(--sidebar-card-border);
+            background: var(--sidebar-card-bg);
+            box-shadow: var(--sidebar-soft-shadow);
+            color: var(--text);
+            justify-content: center;
+            padding: 0 15px;
+            gap: 16px;
+        }
+
+        #github-entry-btn.side-pill {
+            width: var(--sidebar-main-closed-width);
+            gap: 0;
+        }
+
+        .sidebar:hover #github-entry-btn.side-pill,
+        .sidebar.is-pinned #github-entry-btn.side-pill {
+            width: var(--sidebar-main-width);
+            gap: 16px;
+        }
+
+        #github-entry-btn.side-pill:hover {
+            background: var(--sidebar-card-hover-bg);
+            border-color: var(--stage-border);
+            color: var(--text);
+        }
+
+        #github-entry-btn.side-pill svg {
+            width: 20px;
+            height: 20px;
+            flex: 0 0 20px;
+        }
+
+        #github-entry-btn.side-pill .side-pill-text,
+        .sidebar:hover #github-entry-btn.side-pill .side-pill-text,
+        .sidebar.is-pinned #github-entry-btn.side-pill .side-pill-text {
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: .035em;
+        }
+
+        .sidebar:hover #github-entry-btn.side-pill .side-pill-text,
+        .sidebar.is-pinned #github-entry-btn.side-pill .side-pill-text {
+            opacity: 1;
+            max-width: 120px;
+            transition-delay: .08s;
+        }
+
+        .project-version-badge,
+        .update-now-btn,
+        .sidebar:hover .project-version-badge,
+        .sidebar.is-pinned .project-version-badge,
+        .sidebar:hover .update-now-btn,
+        .sidebar.is-pinned .update-now-btn {
+            height: var(--sidebar-main-height);
+            min-height: var(--sidebar-main-height);
+            border-radius: 18px;
+            border: 1px solid var(--sidebar-card-border);
+            background: var(--sidebar-card-bg);
+            box-shadow: var(--sidebar-soft-shadow);
+            color: var(--text);
+            font-size: 12px;
+            font-weight: 900;
+            letter-spacing: .025em;
+        }
+
+        .project-version-badge,
+        .update-now-btn {
+            width: var(--sidebar-main-closed-width);
+        }
+
+        .sidebar:hover .project-version-badge,
+        .sidebar.is-pinned .project-version-badge,
+        .sidebar:hover .update-now-btn,
+        .sidebar.is-pinned .update-now-btn {
+            width: var(--sidebar-main-width);
+        }
+
+        .project-version-badge:hover,
+        .update-now-btn:hover {
+            background: var(--sidebar-card-hover-bg);
+            border-color: var(--stage-border);
+            color: var(--text);
+        }
+
+        .update-now-btn.show {
+            border-color: rgba(34,197,94,.42);
+            background: rgba(34,197,94,.10);
+            color: #16a34a;
+        }
+
+        .update-now-btn.show:hover {
+            background: rgba(34,197,94,.16);
+            color: #15803d;
+            border-color: rgba(34,197,94,.55);
+        }
+
+        html.theme-dark .project-version-badge,
+        body.theme-dark .project-version-badge,
+        html.theme-dark .update-now-btn,
+        body.theme-dark .update-now-btn,
+        html.theme-dark #github-entry-btn.side-pill,
+        body.theme-dark #github-entry-btn.side-pill {
+            background: var(--sidebar-card-bg);
+            border-color: var(--sidebar-card-border);
+            color: #f1f5f9;
+        }
+
+        html.theme-dark .project-version-badge:hover,
+        body.theme-dark .project-version-badge:hover,
+        html.theme-dark #github-entry-btn.side-pill:hover,
+        body.theme-dark #github-entry-btn.side-pill:hover {
+            background: var(--sidebar-card-hover-bg);
+            border-color: rgba(203,213,225,.34);
+        }
+
+
+        /* V16 detail tuning: compact version badge and brighter settings children */
+        .project-version-badge,
+        .sidebar:hover .project-version-badge,
+        .sidebar.is-pinned .project-version-badge {
+            height: 34px;
+            min-height: 34px;
+            flex-basis: 34px;
+            border-radius: 14px;
+            color: var(--text);
+        }
+
+        .settings-pref-btn,
+        .sidebar:hover .settings-pref-btn,
+        .sidebar.is-pinned .settings-pref-btn,
+        .settings-child-pill,
+        .sidebar:hover .settings-child-pill,
+        .sidebar.is-pinned .settings-child-pill {
+            color: var(--text);
+        }
+
+        .settings-pref-btn .side-pill-text,
+        .sidebar:hover .settings-pref-btn .side-pill-text,
+        .sidebar.is-pinned .settings-pref-btn .side-pill-text,
+        .settings-child-pill .side-pill-text,
+        .sidebar:hover .settings-child-pill .side-pill-text,
+        .sidebar.is-pinned .settings-child-pill .side-pill-text {
+            color: inherit;
+        }
+
+        .settings-pref-btn:hover,
+        .settings-pref-btn:focus-visible {
+            background: var(--sidebar-card-hover-bg);
+            border-color: var(--stage-border);
+            color: var(--text);
+            box-shadow: 0 8px 18px rgba(15,23,42,.07);
+            outline: none;
+        }
+
+        .settings-child-pill:hover,
+        .settings-child-pill:focus-visible {
+            background: var(--nav-hover-bg);
+            border-color: transparent;
+            color: var(--text);
+            box-shadow: 0 8px 18px rgba(15,23,42,.06);
+            outline: none;
+        }
+
+        .settings-child-pill.active {
+            background: var(--text);
+            color: var(--bg);
+            border-color: var(--text);
+            box-shadow: 0 8px 18px rgba(15,23,42,.10);
+        }
+
+        html.theme-dark .settings-pref-btn,
+        body.theme-dark .settings-pref-btn,
+        html.theme-dark .sidebar:hover .settings-pref-btn,
+        body.theme-dark .sidebar:hover .settings-pref-btn,
+        html.theme-dark .sidebar.is-pinned .settings-pref-btn,
+        body.theme-dark .sidebar.is-pinned .settings-pref-btn,
+        html.theme-dark .settings-child-pill,
+        body.theme-dark .settings-child-pill,
+        html.theme-dark .sidebar:hover .settings-child-pill,
+        body.theme-dark .sidebar:hover .settings-child-pill,
+        html.theme-dark .sidebar.is-pinned .settings-child-pill,
+        body.theme-dark .sidebar.is-pinned .settings-child-pill {
+            color: #f1f5f9;
+        }
+
+        html.theme-dark .settings-pref-btn:hover,
+        body.theme-dark .settings-pref-btn:hover,
+        html.theme-dark .settings-pref-btn:focus-visible,
+        body.theme-dark .settings-pref-btn:focus-visible {
+            background: rgba(255,255,255,.085);
+            border-color: rgba(203,213,225,.42);
+            color: #ffffff;
+            box-shadow: 0 8px 20px rgba(0,0,0,.20);
+        }
+
+        html.theme-dark .settings-child-pill:hover,
+        body.theme-dark .settings-child-pill:hover,
+        html.theme-dark .settings-child-pill:focus-visible,
+        body.theme-dark .settings-child-pill:focus-visible {
+            background: rgba(255,255,255,.075);
+            color: #ffffff;
+            box-shadow: 0 8px 20px rgba(0,0,0,.18);
+        }
+        /* V17 sidebar compact tuning: reduce footer control height, brighten setting text, add clear hover/focus states */
+        :root {
+            --sidebar-main-height: 34px;
+            --sidebar-sub-height: 25px;
+            --sidebar-pref-height: 23px;
+        }
+
+        .settings-accordion .settings-fold-toggle,
+        .settings-accordion .settings-fold-toggle[aria-expanded=true],
+        .sidebar:hover .settings-accordion .settings-fold-toggle,
+        .sidebar.is-pinned .settings-accordion .settings-fold-toggle,
+        .sidebar:hover .settings-accordion .settings-fold-toggle[aria-expanded=true],
+        .sidebar.is-pinned .settings-accordion .settings-fold-toggle[aria-expanded=true],
+        #github-entry-btn.side-pill,
+        .sidebar:hover #github-entry-btn.side-pill,
+        .sidebar.is-pinned #github-entry-btn.side-pill,
+        .project-version-badge,
+        .sidebar:hover .project-version-badge,
+        .sidebar.is-pinned .project-version-badge,
+        .update-now-btn,
+        .sidebar:hover .update-now-btn,
+        .sidebar.is-pinned .update-now-btn {
+            height: var(--sidebar-main-height);
+            min-height: var(--sidebar-main-height);
+            flex-basis: var(--sidebar-main-height);
+        }
+
+        .settings-accordion .settings-fold-toggle,
+        .settings-accordion .settings-fold-toggle[aria-expanded=true],
+        .sidebar:hover .settings-accordion .settings-fold-toggle,
+        .sidebar.is-pinned .settings-accordion .settings-fold-toggle,
+        .sidebar:hover .settings-accordion .settings-fold-toggle[aria-expanded=true],
+        .sidebar.is-pinned .settings-accordion .settings-fold-toggle[aria-expanded=true],
+        #github-entry-btn.side-pill,
+        .sidebar:hover #github-entry-btn.side-pill,
+        .sidebar.is-pinned #github-entry-btn.side-pill {
+            border-radius: 14px;
+            padding: 0 13px;
+        }
+
+        .settings-accordion .settings-fold-group:not(.is-collapsed),
+        .sidebar:hover .settings-accordion .settings-fold-group:not(.is-collapsed),
+        .sidebar.is-pinned .settings-accordion .settings-fold-group:not(.is-collapsed) {
+            max-height: 210px !important;
+            padding: 4px 8px 7px;
+            gap: 4px;
+        }
+
+        .settings-pref-row,
+        .sidebar:hover .settings-pref-row,
+        .sidebar.is-pinned .settings-pref-row {
+            gap: 5px;
+        }
+
+        .settings-pref-btn,
+        .sidebar:hover .settings-pref-btn,
+        .sidebar.is-pinned .settings-pref-btn {
+            height: var(--sidebar-pref-height);
+            min-height: var(--sidebar-pref-height);
+            flex-basis: var(--sidebar-pref-height);
+            border-radius: 9px;
+            padding: 0 7px;
+            color: var(--text);
+            background: color-mix(in srgb, var(--sidebar-card-bg) 78%, var(--sidebar-bg));
+            border-color: var(--sidebar-card-border);
+        }
+
+        .settings-child-pill,
+        .sidebar:hover .settings-child-pill,
+        .sidebar.is-pinned .settings-child-pill {
+            height: var(--sidebar-sub-height);
+            min-height: var(--sidebar-sub-height);
+            flex-basis: var(--sidebar-sub-height);
+            border-radius: 10px;
+            padding: 0 9px;
+            gap: 10px;
+            color: var(--text);
+        }
+
+        .settings-pref-btn .side-pill-text,
+        .sidebar:hover .settings-pref-btn .side-pill-text,
+        .sidebar.is-pinned .settings-pref-btn .side-pill-text,
+        .settings-child-pill .side-pill-text,
+        .sidebar:hover .settings-child-pill .side-pill-text,
+        .sidebar.is-pinned .settings-child-pill .side-pill-text {
+            color: inherit;
+        }
+
+        .settings-child-pill .side-pill-text,
+        .sidebar:hover .settings-child-pill .side-pill-text,
+        .sidebar.is-pinned .settings-child-pill .side-pill-text {
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .settings-pref-btn:hover,
+        .settings-pref-btn:focus-visible,
+        .settings-child-pill:hover,
+        .settings-child-pill:focus-visible,
+        .settings-accordion .settings-fold-toggle:hover,
+        .settings-accordion .settings-fold-toggle:focus-visible,
+        #github-entry-btn.side-pill:hover,
+        #github-entry-btn.side-pill:focus-visible,
+        .project-version-badge:hover,
+        .project-version-badge:focus-visible,
+        .update-now-btn:hover,
+        .update-now-btn:focus-visible {
+            background: var(--sidebar-card-hover-bg);
+            border-color: var(--stage-border);
+            color: var(--text);
+            box-shadow: 0 7px 16px rgba(15,23,42,.07);
+            outline: none;
+        }
+
+        .settings-pref-btn:active,
+        .settings-child-pill:active,
+        .settings-accordion .settings-fold-toggle:active,
+        #github-entry-btn.side-pill:active,
+        .project-version-badge:active,
+        .update-now-btn:active {
+            transform: translateY(1px) scale(.99);
+        }
+
+        html.theme-dark .settings-pref-btn,
+        body.theme-dark .settings-pref-btn,
+        html.theme-dark .sidebar:hover .settings-pref-btn,
+        body.theme-dark .sidebar:hover .settings-pref-btn,
+        html.theme-dark .sidebar.is-pinned .settings-pref-btn,
+        body.theme-dark .sidebar.is-pinned .settings-pref-btn {
+            background: rgba(255,255,255,.045);
+            border-color: rgba(148,163,184,.24);
+            color: #f1f5f9;
+        }
+
+        html.theme-dark .settings-child-pill,
+        body.theme-dark .settings-child-pill,
+        html.theme-dark .sidebar:hover .settings-child-pill,
+        body.theme-dark .sidebar:hover .settings-child-pill,
+        html.theme-dark .sidebar.is-pinned .settings-child-pill,
+        body.theme-dark .sidebar.is-pinned .settings-child-pill {
+            color: #f1f5f9;
+        }
+
+        html.theme-dark .settings-pref-btn:hover,
+        body.theme-dark .settings-pref-btn:hover,
+        html.theme-dark .settings-pref-btn:focus-visible,
+        body.theme-dark .settings-pref-btn:focus-visible,
+        html.theme-dark .settings-child-pill:hover,
+        body.theme-dark .settings-child-pill:hover,
+        html.theme-dark .settings-child-pill:focus-visible,
+        body.theme-dark .settings-child-pill:focus-visible,
+        html.theme-dark .settings-accordion .settings-fold-toggle:hover,
+        body.theme-dark .settings-accordion .settings-fold-toggle:hover,
+        html.theme-dark .settings-accordion .settings-fold-toggle:focus-visible,
+        body.theme-dark .settings-accordion .settings-fold-toggle:focus-visible,
+        html.theme-dark #github-entry-btn.side-pill:hover,
+        body.theme-dark #github-entry-btn.side-pill:hover,
+        html.theme-dark #github-entry-btn.side-pill:focus-visible,
+        body.theme-dark #github-entry-btn.side-pill:focus-visible,
+        html.theme-dark .project-version-badge:hover,
+        body.theme-dark .project-version-badge:hover,
+        html.theme-dark .project-version-badge:focus-visible,
+        body.theme-dark .project-version-badge:focus-visible,
+        html.theme-dark .update-now-btn:hover,
+        body.theme-dark .update-now-btn:hover,
+        html.theme-dark .update-now-btn:focus-visible,
+        body.theme-dark .update-now-btn:focus-visible {
+            background: rgba(255,255,255,.095);
+            border-color: rgba(203,213,225,.40);
+            color: #ffffff;
+            box-shadow: 0 7px 18px rgba(0,0,0,.20);
+        }
+
+        @media (max-height: 720px) {
+            :root {
+                --sidebar-main-height: 32px;
+                --sidebar-sub-height: 24px;
+                --sidebar-pref-height: 22px;
+            }
+            .settings-accordion .settings-fold-group:not(.is-collapsed),
+            .sidebar:hover .settings-accordion .settings-fold-group:not(.is-collapsed),
+            .sidebar.is-pinned .settings-accordion .settings-fold-group:not(.is-collapsed) {
+                max-height: 198px !important;
+                gap: 3px;
+            }
+        }
+        /* V17 correction: only shrink the project version badge; keep Project Home / Settings at V16 size */
+        :root {
+            --sidebar-main-height: 50px;
+            --sidebar-version-height: 34px;
+        }
+
+        .settings-accordion .settings-fold-toggle,
+        .settings-accordion .settings-fold-toggle[aria-expanded=true],
+        .sidebar:hover .settings-accordion .settings-fold-toggle,
+        .sidebar.is-pinned .settings-accordion .settings-fold-toggle,
+        .sidebar:hover .settings-accordion .settings-fold-toggle[aria-expanded=true],
+        .sidebar.is-pinned .settings-accordion .settings-fold-toggle[aria-expanded=true],
+        #github-entry-btn.side-pill,
+        .sidebar:hover #github-entry-btn.side-pill,
+        .sidebar.is-pinned #github-entry-btn.side-pill {
+            height: var(--sidebar-main-height);
+            min-height: var(--sidebar-main-height);
+            flex-basis: var(--sidebar-main-height);
+            border-radius: 18px;
+            padding: 0 15px;
+        }
+
+        .settings-accordion .settings-fold-group:not(.is-collapsed),
+        .sidebar:hover .settings-accordion .settings-fold-group:not(.is-collapsed),
+        .sidebar.is-pinned .settings-accordion .settings-fold-group:not(.is-collapsed) {
+            max-height: 270px !important;
+            padding: 4px 8px 9px;
+            gap: 5px;
+        }
+
+        .settings-pref-row,
+        .sidebar:hover .settings-pref-row,
+        .sidebar.is-pinned .settings-pref-row {
+            gap: 6px;
+        }
+
+        .settings-pref-btn,
+        .sidebar:hover .settings-pref-btn,
+        .sidebar.is-pinned .settings-pref-btn {
+            height: 34px;
+            min-height: 34px;
+            flex-basis: 34px;
+            border-radius: 12px;
+            padding: 0 8px;
+        }
+
+        .settings-child-pill,
+        .sidebar:hover .settings-child-pill,
+        .sidebar.is-pinned .settings-child-pill {
+            height: 38px;
+            min-height: 38px;
+            flex-basis: 38px;
+            border-radius: 12px;
+            padding: 0 10px;
+            gap: 12px;
+        }
+
+        .project-version-badge,
+        .sidebar:hover .project-version-badge,
+        .sidebar.is-pinned .project-version-badge {
+            height: var(--sidebar-version-height);
+            min-height: var(--sidebar-version-height);
+            flex-basis: var(--sidebar-version-height);
+            border-radius: 14px;
+        }
+        /* V17 active-state fix: settings child items follow main nav selected contrast */
+        .settings-child-pill.active,
+        .settings-child-pill.active:hover,
+        .settings-child-pill.active:focus-visible,
+        .sidebar:hover .settings-child-pill.active,
+        .sidebar:hover .settings-child-pill.active:hover,
+        .sidebar:hover .settings-child-pill.active:focus-visible,
+        .sidebar.is-pinned .settings-child-pill.active,
+        .sidebar.is-pinned .settings-child-pill.active:hover,
+        .sidebar.is-pinned .settings-child-pill.active:focus-visible {
+            background: var(--accent);
+            color: #ffffff;
+            border-color: var(--accent);
+            box-shadow: none;
+            outline: none;
+        }
+
+        html.theme-dark .settings-child-pill.active,
+        body.theme-dark .settings-child-pill.active,
+        html.theme-dark .settings-child-pill.active:hover,
+        body.theme-dark .settings-child-pill.active:hover,
+        html.theme-dark .settings-child-pill.active:focus-visible,
+        body.theme-dark .settings-child-pill.active:focus-visible,
+        html.theme-dark .sidebar:hover .settings-child-pill.active,
+        body.theme-dark .sidebar:hover .settings-child-pill.active,
+        html.theme-dark .sidebar:hover .settings-child-pill.active:hover,
+        body.theme-dark .sidebar:hover .settings-child-pill.active:hover,
+        html.theme-dark .sidebar:hover .settings-child-pill.active:focus-visible,
+        body.theme-dark .sidebar:hover .settings-child-pill.active:focus-visible,
+        html.theme-dark .sidebar.is-pinned .settings-child-pill.active,
+        body.theme-dark .sidebar.is-pinned .settings-child-pill.active,
+        html.theme-dark .sidebar.is-pinned .settings-child-pill.active:hover,
+        body.theme-dark .sidebar.is-pinned .settings-child-pill.active:hover,
+        html.theme-dark .sidebar.is-pinned .settings-child-pill.active:focus-visible,
+        body.theme-dark .sidebar.is-pinned .settings-child-pill.active:focus-visible {
+            background: #f1f5f9;
+            color: #0f172a;
+            border-color: #f1f5f9;
+            box-shadow: none;
+            outline: none;
+        }
+
+        .settings-child-pill.active svg,
+        .settings-child-pill.active .side-pill-text,
+        .settings-child-pill.active:hover svg,
+        .settings-child-pill.active:hover .side-pill-text,
+        .settings-child-pill.active:focus-visible svg,
+        .settings-child-pill.active:focus-visible .side-pill-text {
+            color: inherit;
+        }
+        /* Local tools collapsed spacing: remove the large blank gap under the fold button */
+        #local-nav-group.is-collapsed {
+            display: none;
+            max-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        #local-nav-toggle[aria-expanded="false"] {
+            margin-bottom: 0;
+        }
+
+        #local-nav-toggle[aria-expanded="false"] + #local-nav-group + .sidebar-divider {
+            margin-top: -2px;
+        }
+        /* Local tools collapsed divider spacing correction: keep equal distance above and below the divider */
+        #local-nav-toggle[aria-expanded="false"] + #local-nav-group + .sidebar-divider {
+            margin: 2px auto;
+        }
+
+        /* Settings accordion nav placement: fold downward below Asset Library like local tools */
+        .sidebar nav .settings-accordion {
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        .sidebar:hover nav .settings-accordion,
+        .sidebar.is-pinned nav .settings-accordion {
+            width: 190px;
+        }
+
+        .sidebar nav .settings-accordion .settings-fold-toggle {
+            flex: 0 0 50px;
+            padding: 0 13px;
+        }
+
+        .sidebar:hover nav .settings-accordion .settings-fold-toggle,
+        .sidebar.is-pinned nav .settings-accordion .settings-fold-toggle {
+            gap: 16px;
+        }
+
+        .settings-accordion .settings-fold-group:not(.is-collapsed),
+        .sidebar:hover .settings-accordion .settings-fold-group:not(.is-collapsed),
+        .sidebar.is-pinned .settings-accordion .settings-fold-group:not(.is-collapsed) {
+            margin: 0;
+            padding: 4px 8px 9px;
+        }
+
+        .sidebar nav .settings-child-pill,
+        .sidebar:hover nav .settings-child-pill,
+        .sidebar.is-pinned nav .settings-child-pill {
+            padding: 0 9px 0 12px;
+        }
+
+        /* --- V16 sidebar final implementation end --- */
+
+/* --- sidebar language globe icon start --- */
+        .settings-lang-flag,
+        .settings-pref-btn .settings-lang-flag {
+            flex: 0 0 auto;
+            width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            font-size: 0;
+            opacity: .82;
+        }
+
+        .settings-lang-flag svg,
+        .settings-pref-btn .settings-lang-flag svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+            border-radius: 0;
+            box-shadow: none;
+            overflow: visible;
+        }
+
+        .settings-pref-btn:hover .settings-lang-flag,
+        .settings-pref-btn:focus-visible .settings-lang-flag {
+            opacity: 1;
+        }
+        /* --- sidebar language globe icon end --- */
 
         .project-version-badge {
             width:44px;
@@ -1467,7 +3077,17 @@
         .sidebar.is-collapsing:hover .update-now-text {
             max-width: 42px;
         }
-    </style>
+
+
+/* --- sidebar side-actions width parity fix start --- */
+        .sidebar:hover .project-version-badge,
+        .sidebar.is-pinned .project-version-badge,
+        .sidebar:hover .update-now-btn,
+        .sidebar.is-pinned .update-now-btn {
+            width: var(--sidebar-main-width);
+        }
+        /* --- sidebar side-actions width parity fix end --- */
+</style>
 </head>
 
 <body>
@@ -1516,7 +3136,7 @@
                 </div>
 
                 <!-- 分隔线 -->
-                <div style="width:32px;height:1px;background:var(--border);margin:8px auto;transition:background 0.3s;"></div>
+                <div class="sidebar-divider" aria-hidden="true"></div>
 
                 <div class="nav-item" onclick="switchUI(this, 'online')">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1549,54 +3169,39 @@
                     </svg>
                     <span class="nav-text" data-i18n="nav.assetManager">素材库</span>
                 </div>
-            </nav>
-
-            <div class="side-actions">
-                <button class="side-pill" onclick="switchUI(this, 'api-settings')" type="button" title="API 设置">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M15 7h3a5 5 0 0 1 0 10h-3"></path>
-                        <path d="M9 17H6A5 5 0 0 1 6 7h3"></path>
-                        <line x1="8" y1="12" x2="16" y2="12"></line>
-                    </svg>
-                    <span class="side-pill-text" data-i18n="common.apiSettings">API 设置</span>
-                </button>
-                <button class="side-pill settings-fold-toggle" id="settings-fold-toggle" onclick="toggleSidebarSettings()" type="button" title="更多设置" aria-expanded="false">
+                <div class="sidebar-divider settings-nav-divider" aria-hidden="true"></div>
+                <div class="settings-accordion" id="settings-accordion">
+                    <button class="side-pill settings-fold-toggle" id="settings-fold-toggle" onclick="toggleSidebarSettings(event)" type="button" title="展开设置" aria-expanded="false" aria-label="展开设置">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.36 1.08V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1.08-.36H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .36-1.08V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.22.38.58.69 1 .86.2.08.42.13.65.14H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"></path>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.36 1.08V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1.08-.36H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .36-1.08V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06A2 2 0 1 1 18.89 7.1l-.06.06A1.65 1.65 0 0 0 19.4 9c.22.38.58.69 1 .86.2.08.42.13.65.14H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"></path>
                     </svg>
-                    <span class="side-pill-text" data-i18n="common.moreSettings">更多设置</span>
+                    <span class="side-pill-text">设置</span>
                     <svg class="settings-fold-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <polyline points="6 9 12 15 18 9"></polyline>
                     </svg>
                 </button>
                 <div class="settings-fold-group is-collapsed" id="settings-fold-group">
-                    <button class="side-pill" onclick="toggleTheme()" id="theme-toggle-btn" type="button" title="切换夜间模式">
-                        <svg id="icon-moon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                        </svg>
-                        <svg id="icon-sun" style="display:none" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="5"></circle>
-                            <line x1="12" y1="1" x2="12" y2="3"></line>
-                            <line x1="12" y1="21" x2="12" y2="23"></line>
-                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                            <line x1="1" y1="12" x2="3" y2="12"></line>
-                            <line x1="21" y1="12" x2="23" y2="12"></line>
-                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-                        </svg>
-                        <span class="side-pill-text" data-i18n="common.darkMode">黑夜模式</span>
-                    </button>
-                    <button class="side-pill" onclick="toggleLanguage()" id="lang-toggle-btn" type="button" title="Language">
+                    <div class="settings-pref-row" aria-label="快捷偏好">
+                        <button class="side-pill settings-pref-btn" onclick="toggleTheme()" id="theme-toggle-btn" type="button" title="切换白天 / 夜间模式" aria-label="切换白天 / 夜间模式" data-tip="切换白天 / 夜间模式">
+                            <span class="settings-theme-icon" id="theme-toggle-icon" aria-hidden="true">&#9728;</span>
+                            <span class="side-pill-text" id="theme-toggle-label">白天</span>
+                        </button>
+                        <button class="side-pill settings-pref-btn" onclick="toggleLanguage()" id="lang-toggle-btn" type="button" title="切换中文 / English" aria-label="切换中文 / English" data-tip="切换中文 / English">
+                            <span class="settings-lang-flag" id="lang-flag" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a13.8 13.8 0 0 1 0 18"></path><path d="M12 3a13.8 13.8 0 0 0 0 18"></path></svg></span>
+                            <span class="side-pill-text" id="lang-label">中文</span>
+                        </button>
+                    </div>
+                    <div class="settings-mini-divider" aria-hidden="true"></div>
+                    <button class="side-pill settings-child-pill" onclick="switchUI(this, 'api-settings')" type="button" title="API 设置">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <path d="M2 12h20"></path>
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                            <path d="M15 7h3a5 5 0 0 1 0 10h-3"></path>
+                            <path d="M9 17H6A5 5 0 0 1 6 7h3"></path>
+                            <line x1="8" y1="12" x2="16" y2="12"></line>
                         </svg>
-                        <span class="side-pill-text" data-i18n="common.language">中文</span>
+                        <span class="side-pill-text" data-i18n="common.apiSettings">API 设置</span>
                     </button>
-                    <button class="side-pill" onclick="switchUI(this, 'comfyui-settings')" type="button" title="工作流设置">
+                    <button class="side-pill settings-child-pill" onclick="switchUI(this, 'comfyui-settings')" type="button" title="工作流设置">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="3" y="3" width="7" height="7" rx="1"></rect>
                             <rect x="14" y="3" width="7" height="7" rx="1"></rect>
@@ -1607,7 +3212,21 @@
                         </svg>
                         <span class="side-pill-text" data-i18n="common.comfyuiSettings">工作流设置</span>
                     </button>
+                    <button class="side-pill settings-child-pill" onclick="switchUI(this, 'backup-restore')" type="button" title="备份与恢复">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"></path>
+                            <path d="M1 3h22v5H1z"></path>
+                            <path d="M10 12h4"></path>
+                        </svg>
+                        <span class="side-pill-text" data-i18n="nav.backupRestore">备份与恢复</span>
+                    </button>
                 </div>
+                </div>
+
+
+            </nav>
+
+            <div class="side-actions">
                 <button id="github-entry-btn" class="side-pill" onclick="openProjectPage()" type="button" title="GitHub">
                     <svg fill="currentColor" stroke="none" viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.05c-3.34.73-4.04-1.42-4.04-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.74.08-.74 1.21.09 1.85 1.25 1.85 1.25 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.53.12-3.18 0 0 1.01-.32 3.3 1.23a11.45 11.45 0 0 1 6.01 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.49 5.93.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .5Z"></path>
@@ -1672,16 +3291,17 @@
         </script>
 
         <main class="stage">
-            <iframe id="frame-zimage" data-src="/static/zimage.html?v=2026.07.8.1783537429" class="active" scrolling="yes"></iframe>
-            <iframe id="frame-enhance" data-src="/static/enhance.html?v=2026.07.8.1783537633" scrolling="yes"></iframe>
-            <iframe id="frame-klein" data-src="/static/klein.html?v=2026.07.8.1783537429" scrolling="yes"></iframe>
-            <iframe id="frame-angle" data-src="/static/angle.html?v=2026.07.8.1783537633" scrolling="yes"></iframe>
-            <iframe id="frame-online" data-src="/static/online.html?v=2026.07.8.1783537429" scrolling="yes"></iframe>
-            <iframe id="frame-gpt-chat" data-src="/static/gpt-chat.html?v=2026.07.8.1783537633" scrolling="yes"></iframe>
-            <iframe id="frame-asset-manager" data-src="/static/asset-manager.html?v=2026.07.8.1783537633" scrolling="yes"></iframe>
-            <iframe id="frame-api-settings" data-src="/static/api-settings.html?v=2026.07.8.1783537633" scrolling="yes"></iframe>
-            <iframe id="frame-comfyui-settings" data-src="/static/comfyui-settings.html?v=2026.07.8.1783537633" scrolling="yes"></iframe>
-            <iframe id="frame-canvas" data-src="/static/canvas-list.html?v=canvas-search-restore-1783537860005" scrolling="yes"></iframe>
+            <iframe id="frame-zimage" data-src="/static/zimage.html?v=2026.07.6.1783431320" class="active" scrolling="yes"></iframe>
+            <iframe id="frame-enhance" data-src="/static/enhance.html?v=2026.07.6.1783431320" scrolling="yes"></iframe>
+            <iframe id="frame-klein" data-src="/static/klein.html?v=2026.07.6.1783431320" scrolling="yes"></iframe>
+            <iframe id="frame-angle" data-src="/static/angle.html?v=2026.07.6.1783431320" scrolling="yes"></iframe>
+            <iframe id="frame-online" data-src="/static/online.html?v=2026.07.6.1783431320" scrolling="yes"></iframe>
+            <iframe id="frame-gpt-chat" data-src="/static/gpt-chat.html?v=2026.07.6.1783431320" scrolling="yes"></iframe>
+            <iframe id="frame-asset-manager" data-src="/static/asset-manager.html?v=2026.07.6.1783431320" scrolling="yes"></iframe>
+            <iframe id="frame-backup-restore" data-src="/static/backup-restore.html?v=sidebar-settings-ui-1783542623553" scrolling="yes"></iframe>
+            <iframe id="frame-api-settings" data-src="/static/api-settings.html?v=2026.07.6.1783457381" scrolling="yes"></iframe>
+            <iframe id="frame-comfyui-settings" data-src="/static/comfyui-settings.html?v=2026.07.6.1783456861" scrolling="yes"></iframe>
+            <iframe id="frame-canvas" data-src="/static/canvas-list.html?v=2026.07.6.1783431320" scrolling="yes"></iframe>
 
         </main>
     </div>
@@ -1789,8 +3409,9 @@
         const SIDEBAR_SETTINGS_COLLAPSED_KEY = 'studio_sidebar_settings_collapsed';
         const SIDEBAR_PINNED_KEY = 'studio_sidebar_pinned';
         const DEFAULT_PAGE_ID = 'zimage';
-        const PAGE_IDS = ['zimage','enhance','klein','angle','online','gpt-chat','canvas','asset-manager','api-settings','comfyui-settings'];
+        const PAGE_IDS = ['zimage','enhance','klein','angle','online','gpt-chat','canvas','asset-manager','backup-restore','api-settings','comfyui-settings'];
         const LOCAL_PAGE_IDS = ['zimage','enhance','klein','angle'];
+        const SETTINGS_PAGE_IDS = ['api-settings','comfyui-settings','backup-restore'];
         const PROJECT_URL = 'https://github.com/hero8152/Infinite-Canvas';
         let appInfo = { version:'', repo_url:PROJECT_URL, version_url:'https://raw.githubusercontent.com/hero8152/Infinite-Canvas/main/VERSION' };
         let updateConnectivityResult = null;
@@ -1835,7 +3456,7 @@
             if(group) group.classList.toggle('is-collapsed', collapsed);
             if(toggle) {
                 toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-                toggle.title = collapsed ? '展开本地功能' : '折叠本地功能';
+                toggle.title = collapsed ? '\u5c55\u5f00\u672c\u5730\u529f\u80fd' : '\u6298\u53e0\u672c\u5730\u529f\u80fd';
             }
             if(!options.skipRemember) localStorage.setItem(LOCAL_NAV_COLLAPSED_KEY, collapsed ? '1' : '0');
         }
@@ -1850,25 +3471,94 @@
             setLocalNavCollapsed(savedCollapsed && !LOCAL_PAGE_IDS.includes(id), { skipRemember:true });
         }
 
+        let sidebarSettingsHoverOpened = false;
+        let sidebarSettingsHoverCloseTimer = null;
+
+        function isSidebarSettingsCollapsed() {
+            const group = document.getElementById('settings-fold-group');
+            return group?.classList.contains('is-collapsed') !== false;
+        }
+
+        function getSidebarSettingsSavedCollapsed(id) {
+            const saved = localStorage.getItem(SIDEBAR_SETTINGS_COLLAPSED_KEY);
+            if(saved === '1') return true;
+            if(saved === '0') return false;
+            return !SETTINGS_PAGE_IDS.includes(id);
+        }
+
+        function clearSidebarSettingsHoverClose() {
+            if(sidebarSettingsHoverCloseTimer) {
+                window.clearTimeout(sidebarSettingsHoverCloseTimer);
+                sidebarSettingsHoverCloseTimer = null;
+            }
+        }
+
         function setSidebarSettingsCollapsed(collapsed, options = {}) {
             const group = document.getElementById('settings-fold-group');
             const toggle = document.getElementById('settings-fold-toggle');
+            const accordion = document.getElementById('settings-accordion');
+            const label = collapsed ? '\u5c55\u5f00\u8bbe\u7f6e' : '\u6536\u8d77\u8bbe\u7f6e';
             if(group) group.classList.toggle('is-collapsed', collapsed);
+            if(accordion) accordion.classList.toggle('is-collapsed', collapsed);
             if(toggle) {
                 toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-                toggle.title = collapsed ? '展开更多设置' : '收起更多设置';
+                toggle.title = label;
+                toggle.setAttribute('aria-label', label);
             }
-            if(!options.skipRemember) localStorage.setItem(SIDEBAR_SETTINGS_COLLAPSED_KEY, collapsed ? '1' : '0');
+            if(!options.skipRemember) {
+                sidebarSettingsHoverOpened = false;
+                localStorage.setItem(SIDEBAR_SETTINGS_COLLAPSED_KEY, collapsed ? '1' : '0');
+            }
         }
 
-        function toggleSidebarSettings() {
-            const group = document.getElementById('settings-fold-group');
-            setSidebarSettingsCollapsed(!group?.classList.contains('is-collapsed'));
+        function openSidebarSettingsForHover() {
+            clearSidebarSettingsHoverClose();
+            if(!isSidebarSettingsCollapsed()) return;
+            sidebarSettingsHoverOpened = true;
+            setSidebarSettingsCollapsed(false, { skipRemember:true });
+        }
+
+        function closeSidebarSettingsFromHover() {
+            clearSidebarSettingsHoverClose();
+            if(!sidebarSettingsHoverOpened) return;
+            sidebarSettingsHoverOpened = false;
+            setSidebarSettingsCollapsed(true, { skipRemember:true });
+        }
+
+        function scheduleSidebarSettingsHoverClose() {
+            clearSidebarSettingsHoverClose();
+            sidebarSettingsHoverCloseTimer = window.setTimeout(closeSidebarSettingsFromHover, 80);
+        }
+
+        function initSidebarSettingsHover() {
+            const toggle = document.getElementById('settings-fold-toggle');
+            const accordion = document.getElementById('settings-accordion');
+            if(!toggle || !accordion) return;
+            toggle.addEventListener('pointerenter', event => {
+                if(event.pointerType && event.pointerType !== 'mouse') return;
+                openSidebarSettingsForHover();
+            });
+            accordion.addEventListener('pointerenter', clearSidebarSettingsHoverClose);
+            accordion.addEventListener('pointerleave', event => {
+                if(event.pointerType && event.pointerType !== 'mouse') return;
+                scheduleSidebarSettingsHoverClose();
+            });
+        }
+
+        function toggleSidebarSettings(event) {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            if(sidebarSettingsHoverOpened && !isSidebarSettingsCollapsed()) {
+                setSidebarSettingsCollapsed(false);
+                return;
+            }
+            setSidebarSettingsCollapsed(!isSidebarSettingsCollapsed());
         }
 
         function restoreSidebarSettings(id) {
-            const savedCollapsed = localStorage.getItem(SIDEBAR_SETTINGS_COLLAPSED_KEY) !== '0';
-            setSidebarSettingsCollapsed(savedCollapsed && id !== 'comfyui-settings', { skipRemember:true });
+            sidebarSettingsHoverOpened = false;
+            clearSidebarSettingsHoverClose();
+            setSidebarSettingsCollapsed(getSidebarSettingsSavedCollapsed(id), { skipRemember:true });
         }
 
         function resetStudioRootScroll() {
@@ -1898,8 +3588,12 @@
             } else {
                 setLocalNavCollapsed(localStorage.getItem(LOCAL_NAV_COLLAPSED_KEY) === '1', { skipRemember:true });
             }
-            if(id === 'comfyui-settings') {
-                setSidebarSettingsCollapsed(false, { skipRemember:true });
+            if(SETTINGS_PAGE_IDS.includes(id)) {
+                if(sidebarSettingsHoverOpened && !isSidebarSettingsCollapsed()) {
+                    clearSidebarSettingsHoverClose();
+                } else {
+                    setSidebarSettingsCollapsed(getSidebarSettingsSavedCollapsed(id), { skipRemember:true });
+                }
             }
             // 切换到画布时通知刷新工作流列表（防止在 comfyui-settings 修改后画布未及时更新）
             if (id === 'canvas' && target.src) {
@@ -1936,7 +3630,10 @@
             switchUI(trigger, id, { skipRemember:true });
             document.documentElement.classList.remove('studio-route-booting');
         }
-        document.addEventListener('DOMContentLoaded', restoreActivePage, { once:true });
+        document.addEventListener('DOMContentLoaded', () => {
+            initSidebarSettingsHover();
+            restoreActivePage();
+        }, { once:true });
 
         async function syncStatus() {
             try {
@@ -2031,24 +3728,38 @@
             updateThemeIcon(theme);
         }
 
+
+        function updateSidebarPreferenceLabels() {
+            const lang = window.StudioI18n?.lang?.() === 'en' ? 'en' : 'zh';
+            const dark = (window.StudioTheme ? window.StudioTheme.get() : 'light') === 'dark';
+            const themeBtn = document.getElementById('theme-toggle-btn');
+            const themeLabel = document.getElementById('theme-toggle-label');
+            if(themeLabel) themeLabel.textContent = lang === 'en' ? (dark ? 'Dark' : 'Light') : (dark ? '\u591c\u95f4' : '\u767d\u5929');
+            if(themeBtn) {
+                const tip = lang === 'en' ? 'Switch light / dark mode' : '\u5207\u6362\u767d\u5929 / \u591c\u95f4\u6a21\u5f0f';
+                themeBtn.title = tip;
+                themeBtn.setAttribute('aria-label', tip);
+                themeBtn.dataset.tip = tip;
+            }
+            const langBtn = document.getElementById('lang-toggle-btn');
+            const flag = document.getElementById('lang-flag');
+            const langLabel = document.getElementById('lang-label');
+            const isEn = lang === 'en';
+            if(flag) flag.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a13.8 13.8 0 0 1 0 18"></path><path d="M12 3a13.8 13.8 0 0 0 0 18"></path></svg>`;
+            if(langLabel) langLabel.textContent = isEn ? 'English' : '\u4e2d\u6587';
+            if(langBtn) {
+                const tip = isEn ? 'Switch language / \u5207\u6362\u8bed\u8a00' : '\u5207\u6362\u4e2d\u6587 / English';
+                langBtn.title = tip;
+                langBtn.setAttribute('aria-label', tip);
+                langBtn.dataset.tip = tip;
+            }
+        }
+
         function updateThemeIcon(theme) {
-            const moon = document.getElementById('icon-moon');
-            const sun = document.getElementById('icon-sun');
+            const icon = document.getElementById('theme-toggle-icon');
             const dark = theme === 'dark';
-            if (dark) {
-                moon.style.display = 'none';
-                sun.style.display = 'block';
-            } else {
-                moon.style.display = 'block';
-                sun.style.display = 'none';
-            }
-            // 标签随当前主题切换：暗色时提示切到白天，亮色时提示切到黑夜
-            const label = document.querySelector('#theme-toggle-btn .side-pill-text');
-            if (label) {
-                const key = dark ? 'common.lightMode' : 'common.darkMode';
-                label.dataset.i18n = key;
-                if (window.StudioI18n) label.textContent = window.StudioI18n.t(key);
-            }
+            if (icon) icon.textContent = dark ? '\u263e' : '\u2600';
+            updateSidebarPreferenceLabels();
         }
 
         function toggleTheme() {
@@ -2063,6 +3774,7 @@
             updateProjectUpdateTitle();
             refreshUpdateButtonText();
             refreshProjectUpdateModalText();
+            updateSidebarPreferenceLabels();
         }
 
         function syncLanguageToFrame(frame) {
@@ -2089,11 +3801,17 @@
             broadcastScaleToFrames();
         });
 
+        window.addEventListener('studio-lang-change', updateSidebarPreferenceLabels);
+
+
+
+
         // init icon state on load
         window.addEventListener('DOMContentLoaded', () => {
             const theme = window.StudioTheme ? window.StudioTheme.get() : 'light';
             updateThemeIcon(theme);
             if(window.StudioI18n) window.StudioI18n.apply();
+            updateSidebarPreferenceLabels();
             broadcastLanguage();
             const sidebar = document.getElementById('studioSidebar');
             if(sidebar) {
@@ -2805,3 +4523,11 @@
 </body>
 
 </html>
+
+
+
+
+
+
+
+
