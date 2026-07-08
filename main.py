@@ -1026,30 +1026,34 @@ def merge_runninghub_entry_overlay(system_entry, user_entry):
     return merged
 
 def merge_runninghub_system_entries(system_entries, user_entries, kind):
+    # Preserve the user-saved RunningHub card order; append newly added system templates.
+    system_list = apply_runninghub_system_thumbnails(system_entries or [], kind)
+    system_map = {runninghub_entry_id(entry, kind): entry for entry in system_list if runninghub_entry_id(entry, kind)}
     merged = []
-    index = {}
+    seen = set()
     hidden_ids = set()
-    for entry in apply_runninghub_system_thumbnails(system_entries or [], kind):
+    user_list = apply_runninghub_system_thumbnails(user_entries or [], kind)
+
+    if user_list:
+        for entry in user_list:
+            entry_id = runninghub_entry_id(entry, kind)
+            if not entry_id:
+                continue
+            if entry.get("hidden") is True:
+                hidden_ids.add(entry_id)
+                seen.add(entry_id)
+                continue
+            base = system_map.get(entry_id)
+            merged.append(merge_runninghub_entry_overlay(base, entry) if base else entry)
+            seen.add(entry_id)
+
+    for entry in system_list:
         entry_id = runninghub_entry_id(entry, kind)
-        if not entry_id:
+        if not entry_id or entry_id in seen or entry_id in hidden_ids:
             continue
-        index[entry_id] = len(merged)
         merged.append(entry)
-    for entry in apply_runninghub_system_thumbnails(user_entries or [], kind):
-        entry_id = runninghub_entry_id(entry, kind)
-        if not entry_id:
-            continue
-        if entry.get("hidden") is True:
-            hidden_ids.add(entry_id)
-            if entry_id in index:
-                merged.pop(index[entry_id])
-                index = {runninghub_entry_id(item, kind): idx for idx, item in enumerate(merged)}
-            continue
-        if entry_id in index:
-            merged[index[entry_id]] = merge_runninghub_entry_overlay(merged[index[entry_id]], entry)
-        else:
-            index[entry_id] = len(merged)
-            merged.append(entry)
+        seen.add(entry_id)
+
     return [entry for entry in merged if runninghub_entry_id(entry, kind) not in hidden_ids]
 
 def load_static_runninghub_provider():

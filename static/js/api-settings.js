@@ -151,6 +151,7 @@ let rhWorkflowEditorState = { open:false, index:-1, entry:null, config:null, exp
 let rhEditorMode = 'workflow';
 let recommendInlineOpen = false;
 let providerDragId = '';
+let rhEntryDrag = { kind:'', id:'' };
 // category: 'stable'（稳定）| 'cheap'（便宜），推荐面板按分组分节展示
 const RECOMMENDED_APIS = [
     {
@@ -902,6 +903,79 @@ async function removeRhEntry(kind, index){
     setStatus('已删除，正在保存...');
     const ok = await saveProviders();
     setStatus(ok ? '已删除并保存' : '已删除，但自动保存失败');
+}
+function rhEntryDomId(kind, entry){
+    return String((kind === 'app' ? (entry?.appId || entry?.id) : (entry?.workflowId || entry?.id)) || '').trim();
+}
+function moveRhEntry(kind, index, direction){
+    const item = provider();
+    if(!item || item.id !== 'runninghub') return;
+    const listKey = kind === 'app' ? 'rh_apps' : 'rh_workflows';
+    ensureRunningHubLists(item);
+    const list = item[listKey];
+    if(!Array.isArray(list) || index < 0 || index >= list.length) return;
+    const entry = list[index];
+    if(!entry || entry.hidden === true) return;
+    const visibleIndexes = list.map((value, i) => value?.hidden === true ? -1 : i).filter(i => i >= 0);
+    const visiblePos = visibleIndexes.indexOf(index);
+    const targetVisiblePos = visiblePos + (Number(direction) < 0 ? -1 : 1);
+    if(visiblePos < 0 || targetVisiblePos < 0 || targetVisiblePos >= visibleIndexes.length) return;
+    const targetIndex = visibleIndexes[targetVisiblePos];
+    [list[index], list[targetIndex]] = [list[targetIndex], list[index]];
+    renderRunningHubCards();
+    setStatus('\u6392\u5e8f\u5df2\u8c03\u6574\uff0c\u70b9\u51fb\u4fdd\u5b58\u540e\u751f\u6548');
+}
+function handleRhEntryDragStart(event, kind, index){
+    const item = provider();
+    if(!item || item.id !== 'runninghub') { event.preventDefault(); return; }
+    const listKey = kind === 'app' ? 'rh_apps' : 'rh_workflows';
+    ensureRunningHubLists(item);
+    const entry = item[listKey]?.[index];
+    const id = rhEntryDomId(kind, entry);
+    if(!entry || !id || entry.hidden === true){ event.preventDefault(); return; }
+    rhEntryDrag = { kind, id };
+    event.currentTarget.classList.add('is-dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', `${kind}:${id}`);
+}
+function handleRhEntryDragOver(event, kind, index){
+    if(!rhEntryDrag.id || rhEntryDrag.kind !== kind) return;
+    const item = provider();
+    const listKey = kind === 'app' ? 'rh_apps' : 'rh_workflows';
+    const target = item?.[listKey]?.[index];
+    const targetId = rhEntryDomId(kind, target);
+    if(!targetId || targetId === rhEntryDrag.id) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const root = kind === 'app' ? rhAppsList : rhWorkflowsList;
+    root?.querySelectorAll('.rh-card-drop-target').forEach(el => el.classList.remove('rh-card-drop-target'));
+    event.currentTarget.classList.add('rh-card-drop-target');
+}
+function handleRhEntryDrop(event, kind, targetIndex){
+    event.preventDefault();
+    const root = kind === 'app' ? rhAppsList : rhWorkflowsList;
+    root?.querySelectorAll('.rh-card-drop-target').forEach(el => el.classList.remove('rh-card-drop-target'));
+    const item = provider();
+    if(!item || item.id !== 'runninghub') return;
+    const listKey = kind === 'app' ? 'rh_apps' : 'rh_workflows';
+    ensureRunningHubLists(item);
+    const raw = rhEntryDrag.id ? `${rhEntryDrag.kind}:${rhEntryDrag.id}` : event.dataTransfer.getData('text/plain');
+    rhEntryDrag = { kind:'', id:'' };
+    const match = String(raw || '').match(/^([^:]+):(.+)$/);
+    if(!match || match[1] !== kind) return;
+    const sourceId = match[2];
+    const list = item[listKey];
+    const sourceIndex = list.findIndex(entry => entry?.hidden !== true && rhEntryDomId(kind, entry) === sourceId);
+    if(sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
+    const [moved] = list.splice(sourceIndex, 1);
+    list.splice(targetIndex, 0, moved);
+    renderRunningHubCards();
+    setStatus('\u6392\u5e8f\u5df2\u8c03\u6574\uff0c\u70b9\u51fb\u4fdd\u5b58\u540e\u751f\u6548');
+}
+function handleRhEntryDragEnd(kind){
+    rhEntryDrag = { kind:'', id:'' };
+    const root = kind === 'app' ? rhAppsList : rhWorkflowsList;
+    root?.querySelectorAll('.is-dragging,.rh-card-drop-target').forEach(el => el.classList.remove('is-dragging', 'rh-card-drop-target'));
 }
 function readFileAsDataUrl(file){
     return new Promise((resolve, reject) => {
@@ -2103,27 +2177,34 @@ function renderRhEntryList(target, list, kind){
         target.innerHTML = `<div class="rh-empty">${kind === 'app' ? '粘贴 /run/ai-app/... 后点击创建 AI 应用卡片' : '粘贴 /run/workflow/... 后点击创建工作流卡片'}</div>`;
         return;
     }
-    target.innerHTML = list.map((entry, index) => `
-        <div class="rh-config-card">
-            <button class="rh-thumb" type="button" onclick="pickRhThumbnail('${kind}', ${entry._rhIndex ?? index})" title="上传缩略图">
+    target.innerHTML = list.map((entry, index) => {
+        const sourceIndex = entry._rhIndex ?? index;
+        const canMoveUp = index > 0;
+        const canMoveDown = index < list.length - 1;
+        return `
+        <div class="rh-config-card rh-config-card-sortable" draggable="true" data-rh-kind="${kind}" data-rh-id="${escapeAttr(rhEntryDomId(kind, entry))}" ondragstart="handleRhEntryDragStart(event, '${kind}', ${sourceIndex})" ondragover="handleRhEntryDragOver(event, '${kind}', ${sourceIndex})" ondrop="handleRhEntryDrop(event, '${kind}', ${sourceIndex})" ondragend="handleRhEntryDragEnd('${kind}')">
+            <button class="rh-entry-drag-handle" type="button" title="\u62d6\u62fd\u6392\u5e8f" aria-label="\u62d6\u62fd\u6392\u5e8f"><i data-lucide="grip-vertical" class="w-3.5 h-3.5"></i></button>
+            <button class="rh-thumb" type="button" onclick="pickRhThumbnail('${kind}', ${sourceIndex})" title="\u4e0a\u4f20\u7f29\u7565\u56fe">
                 ${renderRhEntryThumbnail(kind, entry)}
             </button>
             <div class="rh-card-main">
                 <label class="rh-card-title-field">
-                    <span>名称</span>
-                    <input type="text" value="${escapeAttr(entry.title || '')}" oninput="updateRhEntry('${kind}', ${entry._rhIndex ?? index}, 'title', this.value)" placeholder="${kind === 'app' ? 'AI 应用名称' : '工作流名称'}">
+                    <span>\u540d\u79f0</span>
+                    <input type="text" value="${escapeAttr(entry.title || '')}" oninput="updateRhEntry('${kind}', ${sourceIndex}, 'title', this.value)" placeholder="${kind === 'app' ? 'AI \u5e94\u7528\u540d\u79f0' : '\u5de5\u4f5c\u6d41\u540d\u79f0'}">
                 </label>
                 <div class="rh-id-line"><i data-lucide="hash" class="w-3 h-3"></i><span>${escapeHtml(kind === 'app' ? `/run/ai-app/${entry.id}` : `/run/workflow/${entry.id}`)}</span></div>
-                <textarea oninput="updateRhEntry('${kind}', ${entry._rhIndex ?? index}, 'note', this.value)" placeholder="备注、用途、参数说明">${escapeHtml(entry.note || '')}</textarea>
+                <textarea oninput="updateRhEntry('${kind}', ${sourceIndex}, 'note', this.value)" placeholder="\u5907\u6ce8\u3001\u7528\u9014\u3001\u53c2\u6570\u8bf4\u660e">${escapeHtml(entry.note || '')}</textarea>
             </div>
             <div class="rh-card-actions">
+                <button class="rh-card-action rh-sort-btn" type="button" onclick="moveRhEntry('${kind}', ${sourceIndex}, -1)" ${canMoveUp ? '' : 'disabled'} title="\u4e0a\u79fb"><i data-lucide="chevron-up" class="w-3.5 h-3.5"></i></button>
+                <button class="rh-card-action rh-sort-btn" type="button" onclick="moveRhEntry('${kind}', ${sourceIndex}, 1)" ${canMoveDown ? '' : 'disabled'} title="\u4e0b\u79fb"><i data-lucide="chevron-down" class="w-3.5 h-3.5"></i></button>
                 ${kind === 'workflow'
-                    ? `<button class="rh-card-action" type="button" onclick="openRhWorkflowEditor(${entry._rhIndex ?? index})" title="编辑工作流"><i data-lucide="settings-2" class="w-3.5 h-3.5"></i></button>`
-                    : `<button class="rh-card-action" type="button" onclick="openRhAppEditor(${entry._rhIndex ?? index})" title="编辑应用参数"><i data-lucide="settings-2" class="w-3.5 h-3.5"></i></button>`}
-                <button class="rh-card-action danger" type="button" onclick="removeRhEntry('${kind}', ${entry._rhIndex ?? index})" title="删除"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                    ? `<button class="rh-card-action" type="button" onclick="openRhWorkflowEditor(${sourceIndex})" title="\u7f16\u8f91\u5de5\u4f5c\u6d41"><i data-lucide="settings-2" class="w-3.5 h-3.5"></i></button>`
+                    : `<button class="rh-card-action" type="button" onclick="openRhAppEditor(${sourceIndex})" title="\u7f16\u8f91\u5e94\u7528\u53c2\u6570"><i data-lucide="settings-2" class="w-3.5 h-3.5"></i></button>`}
+                <button class="rh-card-action danger" type="button" onclick="removeRhEntry('${kind}', ${sourceIndex})" title="\u5220\u9664"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 function openRecommendApi(){
     recommendInlineOpen = true;
