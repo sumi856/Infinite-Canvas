@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/static/images/logo.png" type="image/png">
+    <title>&#x5907;&#x4efd;&#x4e0e;&#x6062;&#x590d;</title>
+    <script>
+        (function(){
+            try {
+                var theme = localStorage.getItem('studio_theme') || localStorage.getItem('canvas_theme') || 'light';
+                if(theme === 'dark') {
+                    document.documentElement.classList.add('studio-theme-dark');
+                    document.documentElement.classList.add('theme-dark');
+                }
+            } catch(e) {}
+        })();
+    </script>
+    <script src="/static/vendor/js/lucide.js?v=2026.07.6.1783332838"></script>
+    <script src="/static/js/theme.js?v=2026.07.6.1783332838"></script>
+    <link rel="stylesheet" href="/static/css/theme.css?v=2026.07.6.1783332838">
+    <link rel="stylesheet" href="/static/css/backup-restore.css?v=backup-restore-1783542746093">
+</head>
+<body>
+    <div class="backup-page">
+        <header class="backup-head">
+            <div>
+                <div class="backup-kicker">LOCAL SAFETY</div>
+                <h1>&#x5907;&#x4efd;&#x4e0e;&#x6062;&#x590d;</h1>
+                <p>&#x9009;&#x62e9;&#x8f6f;&#x4ef6;&#x3001;&#x5168;&#x5c40;&#x914d;&#x7f6e;&#x3001;&#x753b;&#x5e03;&#x4e0e;&#x7d20;&#x6750;&#x3001;&#x7d20;&#x6750;&#x3001;&#x5386;&#x53f2;&#x3001;&#x81ea;&#x5b9a;&#x4e49;&#x5de5;&#x4f5c;&#x6d41;&#x8fdb;&#x884c;&#x5907;&#x4efd;&#x6216;&#x6062;&#x590d;&#x3002;</p>
+            </div>
+            <div class="backup-head-actions">
+                <div id="backupStatus" class="backup-status">&#x51c6;&#x5907;&#x5c31;&#x7eea;</div>
+                <button id="openBackupFolderBtn" class="backup-btn secondary" type="button"><i data-lucide="folder-open"></i><span>&#x6253;&#x5f00;&#x6587;&#x4ef6;&#x5939;</span></button>
+                <button id="refreshBtn" class="backup-btn secondary" type="button"><i data-lucide="refresh-cw"></i><span>&#x5237;&#x65b0;</span></button>
+            </div>
+        </header>
+        <section class="backup-layout">
+            <div class="backup-left-stack">
+                <aside class="backup-panel backup-create-panel">
+                    <div class="panel-title"><i data-lucide="archive"></i><span>&#x521b;&#x5efa;&#x5907;&#x4efd;</span></div>
+                    <label class="backup-label" for="backupLabel">&#x5907;&#x6ce8;</label>
+                    <input id="backupLabel" class="backup-input" type="text" maxlength="80" placeholder="&#x4f8b;&#x5982;&#xFF1A;&#x66f4;&#x65b0;&#x524d;&#x5b8c;&#x6574;&#x5907;&#x4efd; / &#x4eca;&#x5929;&#x7684;&#x7d20;&#x6750;&#x5e93;">
+                    <div class="preset-row">
+                        <button class="tiny-btn" type="button" data-preset="core">&#x753b;&#x5e03;&#x4e0e;&#x7d20;&#x6750;</button>
+                        <button class="tiny-btn" type="button" data-preset="user">&#x7528;&#x6237;&#x6570;&#x636e;</button>
+                        <button class="tiny-btn" type="button" data-preset="all">&#x5168;&#x9009;</button>
+                        <button class="tiny-btn" type="button" data-preset="none">&#x6e05;&#x7a7a;</button>
+                    </div>
+                    <div id="sectionGrid" class="section-grid"></div>
+                    <div class="create-actions">
+                        <button id="createBackupBtn" class="backup-btn primary" type="button"><i data-lucide="package-plus"></i><span>&#x521b;&#x5efa;&#x5907;&#x4efd;</span></button>
+                        <button id="uploadBackupBtn" class="backup-btn secondary" type="button"><i data-lucide="upload"></i><span>&#x5bfc;&#x5165;&#x5907;&#x4efd;&#x5305;</span></button>
+                        <input id="backupUploadInput" type="file" accept=".zip,application/zip" hidden>
+                    </div>
+                </aside>
+                <aside class="backup-panel api-key-panel">
+                    <div class="panel-title"><i data-lucide="key-round"></i><span>API Key &#x5907;&#x4efd;</span></div>
+                    <p class="api-key-desc">&#x5355;&#x72ec;&#x52a0;&#x5bc6;&#x5907;&#x4efd; API &#x6587;&#x4ef6;&#x5939;&#x4e0b;&#x7684; <code>.env</code> &#x5bc6;&#x94a5;&#x6587;&#x4ef6;&#x3002;&#x521b;&#x5efa;&#x548c;&#x6062;&#x590d;&#x90fd;&#x9700;&#x8981;&#x8f93;&#x5165;&#x5bc6;&#x7801;&#x3002;</p>
+                    <div id="apiKeySection" class="api-key-section"></div>
+                    <div class="api-key-actions">
+                        <button id="createApiKeyBackupBtn" class="backup-btn primary" type="button"><i data-lucide="shield-plus"></i><span>&#x5907;&#x4efd; API Key</span></button>
+                        <button id="importApiKeyBackupBtn" class="backup-btn secondary" type="button"><i data-lucide="shield-check"></i><span>&#x5bfc;&#x5165;&#x5e76;&#x6062;&#x590d;</span></button>
+                        <input id="apiKeyBackupUploadInput" type="file" accept=".zip,application/zip" hidden>
+                    </div>
+                </aside>
+            </div>
+            <main class="backup-panel backup-list-panel">
+                <div class="panel-title"><i data-lucide="history"></i><span>&#x672c;&#x5730;&#x5907;&#x4efd;</span></div>
+                <div id="backupDir" class="backup-dir"></div>
+                <div id="backupPager" class="backup-pager"></div>
+                <div id="backupList" class="backup-list"></div>
+            </main>
+        </section>
+    </div>
+    <script src="/static/js/backup-restore.js?v=backup-restore-1783542746093"></script>
+</body>
+</html>

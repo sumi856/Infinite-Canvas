@@ -2396,6 +2396,637 @@ def rollback_update(req: RollbackRequest):
     finally:
         UPDATE_LOCK.release()
 
+
+# --- 备份与恢复 ---
+
+BACKUP_DIR = os.path.join(DATA_DIR, "backups")
+BACKUP_PAYLOAD_PREFIX = "payload/"
+BACKUP_MANIFEST_NAME = "manifest.json"
+
+BACKUP_SECTION_DEFS: List[Dict[str, Any]] = [
+    {
+        "id": "software",
+        "label": "软件",
+        "description": "主程序、静态页面、脚本与运行组件。适合版本回滚或整机迁移。",
+        "paths": [
+            {"rel": "main.py"}, {"rel": "requirements.txt"}, {"rel": "VERSION"}, {"rel": "README.md"}, {"rel": "LICENSE"},
+            {"rel": "run.bat"}, {"rel": "restore_scripts"},
+            {"rel": "static", "exclude": ["static/runninghub"]}, {"rel": "API", "exclude": ["API/.env"]}, {"rel": "CLI"}, {"rel": "python"}, {"rel": "packages"}, {"rel": "tools"},
+        ],
+    },
+    {
+        "id": "api_keys",
+        "label": "API Key",
+        "description": "API 文件夹下的 .env 密钥文件。创建和恢复都需要输入密码。",
+        "warning": "请牢记密码，忘记后无法恢复。",
+        "protected": True,
+        "paths": [{"rel": "API/.env"}],
+    },
+    {
+        "id": "global_config",
+        "label": "全局配置",
+        "description": "全局设置、base_url、模型列表等API服务商配置。",
+        "paths": [
+            {"rel": "global_config.json"}, {"rel": "data/api_providers.json"}, {"rel": "data/shared_folders.json"},
+        ],
+    },
+    {
+        "id": "canvas",
+        "label": "项目与画布",
+        "description": "项目列表、所有画布 JSON、回收站状态与媒体预览缓存。",
+        "paths": [{"rel": "data/projects.json"}, {"rel": "data/canvases"}, {"rel": "data/media_previews"}],
+    },
+    {
+        "id": "assets",
+        "label": "素材",
+        "description": "素材库、上传素材、输入/输出资源、生成结果与提示词库。",
+        "paths": [{"rel": "assets"}, {"rel": "output"}, {"rel": "data/asset_library.json"}, {"rel": "data/prompt_libraries.json"}],
+    },
+    {
+        "id": "history",
+        "label": "历史",
+        "description": "生成历史记录与 GPT 对话记录。",
+        "paths": [{"rel": "history.json"}, {"rel": "data/conversations"}],
+    },
+    {
+        "id": "workflows",
+        "label": "自定义工作流",
+        "description": "本地工作流、RunningHub 工作流/应用配置、工作流缩略图与模板资源。",
+        "paths": [{"rel": "workflows"}, {"rel": "data/runninghub_workflows.json"}, {"rel": "static/runninghub"}],
+    },
+]
+BACKUP_SECTION_BY_ID = {item["id"]: item for item in BACKUP_SECTION_DEFS}
+BACKUP_LOCK = Lock()
+BACKUP_GLOBAL_CONFIG_RELS = {"global_config.json", "data/api_providers.json", "data/shared_folders.json"}
+BACKUP_LEGACY_PROJECT_CANVAS_RELS = {"data/projects.json"}
+BACKUP_ASSET_SCOPE_CANVAS_REFS = "canvas_refs"
+BACKUP_ASSET_SCOPE_FULL = "full"
+BACKUP_ASSET_SCOPES = {BACKUP_ASSET_SCOPE_CANVAS_REFS, BACKUP_ASSET_SCOPE_FULL}
+
+
+def backup_effective_section_id(section_id: str, rel: str = "") -> str:
+    """Map legacy backup entries to current section ids.
+
+    Older backups stored global_config.json, data/api_providers.json and
+    data/shared_folders.json under the "project" section. After splitting
+    project/global_config, treat those archived files as global_config so
+    old backup packages can still be restored selectively.
+    """
+    sid = str(section_id or "").strip()
+    try:
+        safe_rel = backup_safe_rel(rel) if rel else ""
+    except Exception:
+        safe_rel = str(rel or "").replace("\\", "/").lstrip("/")
+    if sid == "project" and safe_rel in BACKUP_GLOBAL_CONFIG_RELS:
+        return "global_config"
+    if sid == "project" and (not safe_rel or safe_rel in BACKUP_LEGACY_PROJECT_CANVAS_RELS):
+        return "canvas"
+    if sid == "project":
+        return "canvas"
+    return sid
+
+
+def backup_manifest_section_ids(manifest: Dict[str, Any]) -> List[str]:
+    ids: List[str] = []
+    if isinstance(manifest, dict) and isinstance(manifest.get("files"), list):
+        for item in manifest.get("files") or []:
+            sid = backup_effective_section_id(item.get("section"), item.get("rel"))
+            if sid in BACKUP_SECTION_BY_ID and sid not in ids:
+                ids.append(sid)
+    if not ids and isinstance(manifest, dict) and isinstance(manifest.get("sections"), list):
+        for sid in manifest.get("sections") or []:
+            sid = backup_effective_section_id(str(sid or "").strip())
+            if sid in BACKUP_SECTION_BY_ID and sid not in ids:
+                ids.append(sid)
+    return ids
+
+
+def backup_safe_rel(rel: str) -> str:
+    cleaned = str(rel or "").replace("\\", "/").lstrip("/")
+    cleaned = re.sub(r"/+", "/", cleaned)
+    if not cleaned or cleaned == "." or cleaned.startswith("../") or "/../" in cleaned or cleaned.endswith("/.."):
+        raise ValueError("备份路径不安全")
+    if os.path.isabs(cleaned):
+        raise ValueError("备份路径不安全")
+    return cleaned
+
+
+def backup_abs_path(rel: str) -> str:
+    cleaned = backup_safe_rel(rel)
+    base = os.path.abspath(BASE_DIR)
+    target = os.path.abspath(os.path.join(base, *cleaned.split("/")))
+    if os.path.commonpath([base, target]) != base:
+        raise ValueError("备份路径不安全")
+    return target
+
+
+def backup_zip_path(name: str) -> str:
+    safe = os.path.basename(str(name or "").strip())
+    if not safe.lower().endswith(".zip"):
+        safe += ".zip"
+    root = os.path.abspath(BACKUP_DIR)
+    path = os.path.abspath(os.path.join(root, safe))
+    if os.path.commonpath([root, path]) != root:
+        raise ValueError("备份名称不安全")
+    return path
+
+
+def backup_import_marker_path(name: str) -> str:
+    path = backup_zip_path(name)
+    return path + ".imported"
+
+
+def backup_is_imported(name: str) -> bool:
+    try:
+        return os.path.isfile(backup_import_marker_path(name))
+    except Exception:
+        return False
+
+
+def backup_section_public_defs() -> List[Dict[str, Any]]:
+    return [{
+        "id": str(item.get("id", "")),
+        "label": str(item.get("label", "")),
+        "description": str(item.get("description", "")),
+        "warning": str(item.get("warning", "")),
+        "protected": bool(item.get("protected")),
+    } for item in BACKUP_SECTION_DEFS]
+
+
+def backup_normalize_sections(section_ids: List[str]) -> List[str]:
+    ids: List[str] = []
+    for sid in section_ids or []:
+        sid = str(sid or "").strip()
+        if sid in BACKUP_SECTION_BY_ID and sid not in ids:
+            ids.append(sid)
+    if not ids:
+        raise HTTPException(status_code=400, detail="请至少选择一个备份类别")
+    return ids
+
+
+
+def backup_requires_password(section_ids: List[str]) -> bool:
+    return "api_keys" in (section_ids or [])
+
+
+def backup_require_password(section_ids: List[str], password: str):
+    if backup_requires_password(section_ids) and not str(password or "").strip():
+        raise HTTPException(status_code=400, detail="备份 API Key 必须输入密码")
+
+
+def backup_api_key_derive_key(password: str, salt: bytes, iterations: int = 200000) -> bytes:
+    return hashlib.pbkdf2_hmac("sha256", str(password).encode("utf-8"), salt, iterations, dklen=32)
+
+
+def backup_api_key_keystream(key: bytes, nonce: bytes, size: int) -> bytes:
+    chunks = []
+    counter = 0
+    while sum(len(x) for x in chunks) < size:
+        chunks.append(hmac.new(key, nonce + counter.to_bytes(8, "big"), hashlib.sha256).digest())
+        counter += 1
+    return b"".join(chunks)[:size]
+
+
+def backup_encrypt_api_key_file(raw: bytes, password: str) -> bytes:
+    salt = os.urandom(16)
+    nonce = os.urandom(16)
+    iterations = 200000
+    key = backup_api_key_derive_key(password, salt, iterations)
+    stream = backup_api_key_keystream(key, nonce, len(raw))
+    cipher = bytes(a ^ b for a, b in zip(raw, stream))
+    mac = hmac.new(key, b"api-env-v1" + salt + nonce + cipher, hashlib.sha256).digest()
+    payload = {
+        "backup_encryption": "api-env-v1",
+        "kdf": "pbkdf2-hmac-sha256",
+        "iterations": iterations,
+        "salt": base64.b64encode(salt).decode("ascii"),
+        "nonce": base64.b64encode(nonce).decode("ascii"),
+        "mac": base64.b64encode(mac).decode("ascii"),
+        "data": base64.b64encode(cipher).decode("ascii"),
+    }
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
+def backup_decrypt_api_key_file(blob: bytes, password: str) -> bytes:
+    try:
+        payload = json.loads(blob.decode("utf-8"))
+        if payload.get("backup_encryption") != "api-env-v1":
+            raise ValueError("不支持的 API Key 备份")
+        iterations = int(payload.get("iterations") or 200000)
+        salt = base64.b64decode(payload.get("salt") or "")
+        nonce = base64.b64decode(payload.get("nonce") or "")
+        cipher = base64.b64decode(payload.get("data") or "")
+        expected_mac = base64.b64decode(payload.get("mac") or "")
+    except Exception as exc:
+        raise ValueError(f"API Key 备份解析失败：{exc}") from exc
+    key = backup_api_key_derive_key(password, salt, iterations)
+    actual_mac = hmac.new(key, b"api-env-v1" + salt + nonce + cipher, hashlib.sha256).digest()
+    if not hmac.compare_digest(actual_mac, expected_mac):
+        raise ValueError("API Key 备份密码错误或文件已损坏")
+    stream = backup_api_key_keystream(key, nonce, len(cipher))
+    return bytes(a ^ b for a, b in zip(cipher, stream))
+
+
+def backup_rel_is_excluded(rel: str, excludes: List[str]) -> bool:
+    rel = backup_safe_rel(rel)
+    for ex in excludes or []:
+        prefix = backup_safe_rel(ex).rstrip("/")
+        if rel == prefix or rel.startswith(prefix + "/"):
+            return True
+    return False
+
+
+def backup_normalize_asset_scope(value: str) -> str:
+    scope = str(value or BACKUP_ASSET_SCOPE_FULL).strip()
+    return scope if scope in BACKUP_ASSET_SCOPES else BACKUP_ASSET_SCOPE_FULL
+
+
+def backup_collect_canvas_reference_asset_files() -> List[str]:
+    """Collect local /assets and /output files referenced by non-deleted canvases."""
+    files: List[str] = []
+    seen = set()
+    if not os.path.isdir(CANVAS_DIR):
+        return files
+    for filename in os.listdir(CANVAS_DIR):
+        if not filename.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(CANVAS_DIR, filename), "r", encoding="utf-8") as f:
+                canvas = json.load(f)
+        except Exception:
+            continue
+        if not isinstance(canvas, dict) or canvas.get("deleted_at"):
+            continue
+        try:
+            items = extract_canvas_assets(canvas)
+        except Exception:
+            items = []
+        for item in items:
+            try:
+                path = output_file_from_url(item.get("url") if isinstance(item, dict) else item)
+            except Exception:
+                path = None
+            if not path or not os.path.isfile(path):
+                continue
+            try:
+                rel = backup_safe_rel(os.path.relpath(path, BASE_DIR).replace("\\", "/"))
+            except Exception:
+                continue
+            if not (rel.startswith("assets/") or rel.startswith("output/")):
+                continue
+            if rel not in seen:
+                seen.add(rel)
+                files.append(rel)
+    return files
+
+
+def backup_collect_section_files(section_id: str, asset_scope: str = BACKUP_ASSET_SCOPE_FULL) -> List[str]:
+    if section_id == "assets" and backup_normalize_asset_scope(asset_scope) == BACKUP_ASSET_SCOPE_CANVAS_REFS:
+        return backup_collect_canvas_reference_asset_files()
+    section = BACKUP_SECTION_BY_ID.get(section_id)
+    if not section:
+        return []
+    files: List[str] = []
+    seen = set()
+    skip_dir_names = {".git", ".agents", ".codex", "__pycache__", ".pytest_cache"}
+    for entry in section.get("paths") or []:
+        root_rel = backup_safe_rel(entry.get("rel"))
+        excludes = [backup_safe_rel(x) for x in (entry.get("exclude") or [])]
+        try:
+            root_abs = backup_abs_path(root_rel)
+        except ValueError:
+            continue
+        if not os.path.exists(root_abs):
+            continue
+        if os.path.isfile(root_abs):
+            if not backup_rel_is_excluded(root_rel, excludes) and root_rel not in seen:
+                seen.add(root_rel)
+                files.append(root_rel)
+            continue
+        for dirpath, dirnames, filenames in os.walk(root_abs):
+            dirnames[:] = [d for d in dirnames if d not in skip_dir_names]
+            rel_dir = os.path.relpath(dirpath, BASE_DIR).replace("\\", "/")
+            if backup_rel_is_excluded(rel_dir, excludes):
+                dirnames[:] = []
+                continue
+            for fn in filenames:
+                abs_file = os.path.join(dirpath, fn)
+                rel = os.path.relpath(abs_file, BASE_DIR).replace("\\", "/")
+                if backup_rel_is_excluded(rel, excludes):
+                    continue
+                if rel not in seen:
+                    seen.add(rel)
+                    files.append(rel)
+    return files
+
+
+def create_backup_archive(section_ids: List[str], label: str = "", name_prefix: str = "backup", password: str = "", asset_scope: str = BACKUP_ASSET_SCOPE_FULL) -> Dict[str, Any]:
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    section_ids = backup_normalize_sections(section_ids)
+    backup_require_password(section_ids, password)
+    asset_scope = backup_normalize_asset_scope(asset_scope)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    archive_name = f"{name_prefix}_{stamp}_{uuid.uuid4().hex[:6]}.zip"
+    archive_path = backup_zip_path(archive_name)
+    tmp_path = archive_path + ".tmp"
+    manifest: Dict[str, Any] = {
+        "version": 1,
+        "created_at": time.time(),
+        "label": str(label or "").strip()[:120],
+        "sections": section_ids,
+        "asset_scope": asset_scope if "assets" in section_ids else "",
+        "app_version": "",
+        "files": [],
+        "errors": [],
+    }
+    try:
+        version_path = os.path.join(BASE_DIR, "VERSION")
+        if os.path.exists(version_path):
+            with open(version_path, "r", encoding="utf-8") as f:
+                manifest["app_version"] = (f.read().strip().splitlines() or [""])[0].strip()
+    except Exception:
+        manifest["app_version"] = ""
+    seen = set()
+    file_count = 0
+    total_size = 0
+    errors: List[str] = []
+    try:
+        with zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+            for sid in section_ids:
+                for rel in backup_collect_section_files(sid, asset_scope):
+                    if rel in seen:
+                        continue
+                    seen.add(rel)
+                    abs_file = backup_abs_path(rel)
+                    if not os.path.isfile(abs_file):
+                        continue
+                    try:
+                        st = os.stat(abs_file)
+                    except OSError:
+                        continue
+                    arcname = BACKUP_PAYLOAD_PREFIX + rel
+                    item_meta = {"rel": rel, "section": sid, "size": int(st.st_size), "mtime": float(st.st_mtime)}
+                    try:
+                        if sid == "api_keys" and rel == "API/.env":
+                            with open(abs_file, "rb") as src:
+                                encrypted = backup_encrypt_api_key_file(src.read(), password)
+                            zf.writestr(arcname, encrypted)
+                            item_meta["encrypted"] = True
+                            item_meta["encryption"] = "api-env-v1"
+                            item_meta["stored_size"] = len(encrypted)
+                        else:
+                            zf.write(abs_file, arcname)
+                    except Exception as exc:
+                        errors.append(f"{rel}: {exc}")
+                        continue
+                    file_count += 1
+                    total_size += int(st.st_size)
+                    manifest["files"].append(item_meta)
+            manifest["file_count"] = file_count
+            manifest["total_size"] = total_size
+            manifest["errors"] = errors[:200]
+            zf.writestr(BACKUP_MANIFEST_NAME, json.dumps(manifest, ensure_ascii=False, indent=2))
+        os.replace(tmp_path, archive_path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        raise
+    return {"name": archive_name, "path": archive_path, "manifest": manifest, "size": os.path.getsize(archive_path)}
+
+
+def read_backup_manifest(path: str) -> Dict[str, Any]:
+    try:
+        with zipfile.ZipFile(path, "r") as zf:
+            if BACKUP_MANIFEST_NAME not in zf.namelist():
+                return {}
+            return json.loads(zf.read(BACKUP_MANIFEST_NAME).decode("utf-8-sig"))
+    except Exception:
+        return {}
+
+
+def backup_zip_file_count(path: str, manifest: Dict[str, Any]) -> int:
+    try:
+        if isinstance(manifest, dict) and int(manifest.get("file_count") or 0) > 0:
+            return int(manifest.get("file_count") or 0)
+    except Exception:
+        pass
+    try:
+        with zipfile.ZipFile(path, "r") as zf:
+            return sum(1 for n in zf.namelist() if n.startswith(BACKUP_PAYLOAD_PREFIX) and not n.endswith("/"))
+    except Exception:
+        return 0
+
+
+@app.get("/api/backup-sections")
+def get_backup_sections():
+    return {"sections": backup_section_public_defs()}
+
+
+@app.get("/api/backups")
+def list_backups():
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    backups: List[Dict[str, Any]] = []
+    for name in sorted(os.listdir(BACKUP_DIR), reverse=True):
+        if not name.lower().endswith(".zip"):
+            continue
+        path = backup_zip_path(name)
+        if not os.path.isfile(path):
+            continue
+        mf = read_backup_manifest(path)
+        try:
+            modified_at = os.path.getmtime(path)
+            size = os.path.getsize(path)
+        except OSError:
+            modified_at = 0
+            size = 0
+        sections = backup_manifest_section_ids(mf)
+        backups.append({
+            "name": name,
+            "size": size,
+            "modified_at": modified_at,
+            "file_count": backup_zip_file_count(path, mf),
+            "sections": sections,
+            "label": str(mf.get("label") or "") if isinstance(mf, dict) else "",
+            "imported": backup_is_imported(name),
+            "manifest": {"created_at": mf.get("created_at"), "sections": sections, "file_count": mf.get("file_count"), "asset_scope": mf.get("asset_scope")} if isinstance(mf, dict) else {},
+        })
+    backups.sort(key=lambda item: (float(item.get("modified_at") or 0), str(item.get("name") or "")), reverse=True)
+    return {"backup_dir": BACKUP_DIR, "backups": backups}
+
+
+class BackupCreateRequest(BaseModel):
+    sections: List[str] = []
+    label: str = ""
+    password: str = ""
+    asset_scope: str = BACKUP_ASSET_SCOPE_FULL
+
+
+@app.get("/api/backup-folder/open")
+@app.post("/api/backup-folder/open")
+@app.get("/api/backups/open-folder")
+@app.post("/api/backups/open-folder")
+def open_backup_folder():
+    try:
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        folder = os.path.abspath(BACKUP_DIR)
+        if sys.platform.startswith("win"):
+            os.startfile(folder)  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", folder])
+        else:
+            subprocess.Popen(["xdg-open", folder])
+        return {"ok": True, "path": folder}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"\u6253\u5f00\u5907\u4efd\u6587\u4ef6\u5939\u5931\u8d25\uff1a{exc}") from exc
+
+
+@app.post("/api/backups")
+def create_backup(req: BackupCreateRequest):
+    if not BACKUP_LOCK.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="正在执行备份或恢复，请稍后再试")
+    try:
+        section_ids = backup_normalize_sections(req.sections)
+        name_prefix = "safety" if section_ids == ["api_keys"] else "backup"
+        backup = create_backup_archive(section_ids, req.label, name_prefix, req.password, req.asset_scope)
+        return {"ok": True, "backup": {"name": backup["name"], "size": backup["size"], "manifest": backup["manifest"]}}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"备份失败：{exc}") from exc
+    finally:
+        BACKUP_LOCK.release()
+
+
+@app.post("/api/backups/upload")
+async def upload_backup(file: UploadFile = File(...)):
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    original = os.path.basename(file.filename or "backup.zip")
+    if not original.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="请上传 .zip 备份包")
+    raw = await file.read()
+    try:
+        with zipfile.ZipFile(BytesIO(raw), "r") as zf:
+            zf.testzip()
+            for info in zf.infolist():
+                n = info.filename.replace("\\", "/")
+                if n.startswith("/") or n.startswith("../") or "/../" in n:
+                    raise HTTPException(status_code=400, detail="备份包包含不安全路径")
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=400, detail="备份包不是有效 zip 文件") from exc
+    safe_name = sanitize_export_filename(original, "backup.zip")
+    if not safe_name.lower().endswith(".zip"):
+        safe_name += ".zip"
+    dest = backup_zip_path(safe_name)
+    if os.path.exists(dest):
+        stem, ext = os.path.splitext(safe_name)
+        dest = backup_zip_path(f"{stem}_{uuid.uuid4().hex[:6]}{ext}")
+    with open(dest, "wb") as f:
+        f.write(raw)
+    try:
+        with open(backup_import_marker_path(os.path.basename(dest)), "w", encoding="utf-8") as marker:
+            marker.write(json.dumps({"imported_at": time.time(), "original_name": original}, ensure_ascii=False))
+    except Exception:
+        pass
+    return {"ok": True, "backup": os.path.basename(dest)}
+
+
+class BackupRestoreRequest(BaseModel):
+    sections: List[str] = []
+    create_safety_backup: bool = False
+    password: str = ""
+
+
+@app.post("/api/backups/{name}/restore")
+def restore_backup(name: str, req: BackupRestoreRequest):
+    sections = backup_normalize_sections(req.sections)
+    backup_require_password(sections, req.password)
+    if not BACKUP_LOCK.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="正在执行备份或恢复，请稍后再试")
+    safety_backup = ""
+    restored: List[str] = []
+    skipped: List[str] = []
+    try:
+        path = backup_zip_path(name)
+        if not os.path.isfile(path):
+            raise HTTPException(status_code=404, detail="备份不存在")
+        with zipfile.ZipFile(path, "r") as zf:
+            mf = read_backup_manifest(path)
+            names = set(zf.namelist())
+            entries: List[Dict[str, Any]] = []
+            if isinstance(mf, dict) and isinstance(mf.get("files"), list):
+                entries = [item for item in mf.get("files") or [] if backup_effective_section_id(item.get("section"), item.get("rel")) in sections]
+            if not entries:
+                entries = [{"rel": n[len(BACKUP_PAYLOAD_PREFIX):], "section": sections[0]} for n in zf.namelist() if n.startswith(BACKUP_PAYLOAD_PREFIX) and not n.endswith("/")]
+            for item in entries:
+                try:
+                    rel = backup_safe_rel(item.get("rel"))
+                    arcname = BACKUP_PAYLOAD_PREFIX + rel
+                    if arcname not in names:
+                        skipped.append(rel)
+                        continue
+                    target = backup_abs_path(rel)
+                    os.makedirs(os.path.dirname(target), exist_ok=True)
+                    tmp = target + f".restore_{uuid.uuid4().hex[:8]}.tmp"
+                    if item.get("encrypted") is True and item.get("encryption") == "api-env-v1":
+                        raw = zf.read(arcname)
+                        plain = backup_decrypt_api_key_file(raw, req.password)
+                        with open(tmp, "wb") as dst:
+                            dst.write(plain)
+                    else:
+                        with zf.open(arcname, "r") as src, open(tmp, "wb") as dst:
+                            shutil.copyfileobj(src, dst)
+                    os.replace(tmp, target)
+                    try:
+                        mtime = float(item.get("mtime") or 0)
+                        if mtime > 0:
+                            os.utime(target, (mtime, mtime))
+                    except Exception:
+                        pass
+                    restored.append(rel)
+                except Exception as exc:
+                    skipped.append(f"{item.get('rel') or ''} ({exc})")
+        return {
+            "ok": True,
+            "count": len(restored),
+            "restored": restored,
+            "skipped": skipped,
+            "safety_backup": safety_backup,
+            "restart_required": "software" in sections,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"恢复失败：{exc}") from exc
+    finally:
+        BACKUP_LOCK.release()
+
+
+@app.get("/api/backups/{name}/download")
+def download_backup_file(name: str):
+    path = backup_zip_path(name)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="备份不存在")
+    return FileResponse(path, media_type="application/zip", filename=os.path.basename(path))
+
+
+@app.delete("/api/backups/{name}")
+def delete_backup_file(name: str):
+    path = backup_zip_path(name)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="备份不存在")
+    try:
+        os.remove(path)
+        marker_path = backup_import_marker_path(name)
+        if os.path.isfile(marker_path):
+            os.remove(marker_path)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"删除失败：{exc}") from exc
+    return {"ok": True}
+
+
 class GenerateRequest(BaseModel):
     prompt: str = ""
     width: int = 1024
