@@ -91,6 +91,10 @@ let mentionInsertMode = 'token';
 let panState = null;
 let didPan = false;
 let portDragState = null;
+let smartPortHoverState = null;
+let smartPortHoverPointer = null;
+let smartPortViewportPreviewSuspended = false;
+let smartPortViewportPreviewTimer = null;
 let saveTimer = null;
 let apiProviders = [];
 let comfyWorkflows = [];
@@ -2051,6 +2055,7 @@ function applyViewport(){
     shell.style.backgroundSize = '24px 24px';
     shell.style.backgroundPosition = '0 0';
     renderMinimap();
+    refreshSmartPortHoverPreviewAfterViewport();
 }
 function screenToWorld(event){
     const rect = shell.getBoundingClientRect();
@@ -7630,10 +7635,353 @@ function ensurePortDragPathElement(){
     return path;
 }
 function clearPortDragVisual(){
+    clearSmartPortDragTargetPreview();
+    clearSmartPortHoverPreview();
     world.querySelector('path.port-drag-temp')?.remove();
     world.querySelectorAll('.node-port.is-active').forEach(el => el.classList.remove('is-active'));
     world.querySelectorAll('.image-node.port-hover').forEach(el => el.classList.remove('port-hover'));
 }
+
+const SMART_NODE_PORT_HIT_RADIUS = 60;
+const SMART_PORT_INDICATOR_OUTSIDE_PAD = 12;
+function smartPortHitScreenRadius(baseRadius=SMART_NODE_PORT_HIT_RADIUS){
+    const scale = Number(viewport?.scale) || 1;
+    return Math.max(1, baseRadius * scale);
+}
+function smartPortIndicatorScale(){
+    return Math.max(0.05, Number(viewport?.scale) || 1);
+}
+function smartPortIndicatorScreenPad(){
+    return SMART_PORT_INDICATOR_OUTSIDE_PAD * smartPortIndicatorScale();
+}
+function smartPortBuildHitFromNode(nodeEl, e, port='', opts={}){
+    const nodeId = nodeEl?.dataset?.id || '';
+    if(!nodeId) return null;
+    const excludeId = opts.excludeId || '';
+    const onlyId = opts.onlyId || '';
+    if(nodeId === excludeId) return null;
+    if(onlyId && nodeId !== onlyId) return null;
+    const rect = nodeEl.getBoundingClientRect();
+    if(!rect.width || !rect.height) return null;
+    const resolvedPort = port || ((e.clientX - rect.left) < rect.width / 2 ? 'in' : 'out');
+    const x = resolvedPort === 'in' ? rect.left : rect.right;
+    const y = rect.top + rect.height / 2;
+    const pad = smartPortIndicatorScreenPad();
+    const visualX = resolvedPort === 'in' ? rect.left - pad : rect.right + pad;
+    const dx = e.clientX - x;
+    const dy = e.clientY - y;
+    const mouseInsideFrame = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+    return {
+        nodeId,
+        port:resolvedPort,
+        nodeEl,
+        dist:Math.hypot(dx, dy),
+        screenX:x,
+        screenY:y,
+        visualX,
+        visualY:y,
+        frameLeft:rect.left,
+        frameRight:rect.right,
+        mouseX:e.clientX,
+        mouseY:e.clientY,
+        mouseInsideFrame,
+        hitRadius:Number(opts.radius) || smartPortHitScreenRadius(),
+        previewOnly:Boolean(opts.previewOnly),
+        active:Boolean(opts.active)
+    };
+}
+function smartPortHitFromEvent(e, opts={}){
+    const excludeId = opts.excludeId || '';
+    const onlyId = opts.onlyId || '';
+    const radius = smartPortHitScreenRadius(Number(opts.radius) || SMART_NODE_PORT_HIT_RADIUS);
+    let best = null;
+    world.querySelectorAll('.image-node[data-id]').forEach(nodeEl => {
+        ['in', 'out'].forEach(port => {
+            const hit = smartPortBuildHitFromNode(nodeEl, e, port, {excludeId, onlyId, radius});
+            if(hit && hit.dist <= radius && (!best || hit.dist < best.dist)){
+                hit.previewOnly = false;
+                hit.active = true;
+                best = hit;
+            }
+        });
+    });
+    return best;
+}
+function smartPortPreviewFromEvent(e){
+    const hitEl = document.elementFromPoint(e.clientX, e.clientY);
+    const portEl = hitEl?.closest?.('.node-port');
+    const nodeUnderMouse = portEl?.closest?.('.image-node[data-id]') || hitEl?.closest?.('.image-node[data-id]');
+    const nearPort = nodeUnderMouse ? smartPortHitFromEvent(e, {onlyId:nodeUnderMouse.dataset.id || ''}) : smartPortHitFromEvent(e);
+    const nodeEl = nodeUnderMouse || nearPort?.nodeEl;
+    if(!nodeEl) return null;
+    const nodeId = nodeEl.dataset.id || '';
+    const activePort = nearPort && nearPort.nodeId === nodeId ? nearPort.port : '';
+    const hits = ['in', 'out'].map(port => {
+        const hit = smartPortBuildHitFromNode(nodeEl, e, port, {active:port === activePort, previewOnly:port !== activePort});
+        if(hit && port === activePort && nearPort){
+            hit.dist = nearPort.dist;
+            hit.hitRadius = nearPort.hitRadius;
+            hit.previewOnly = false;
+            hit.active = true;
+        }
+        return hit;
+    }).filter(Boolean);
+    return {nodeId, activePort, hits};
+}
+function ensureSmartPortHitIndicators(){
+    const indicators = {};
+    ['in', 'out'].forEach(port => {
+        let el = shell.querySelector(`.smart-port-hit-indicator[data-port="${port}"]`);
+        if(!el){
+            el = document.createElement('div');
+            el.className = 'smart-port-hit-indicator';
+            el.dataset.port = port;
+            shell.appendChild(el);
+        }
+        indicators[port] = el;
+    });
+    return indicators;
+}
+function clearSmartPortHoverPreview(){
+    smartPortHoverPointer = null;
+    if(!smartPortHoverState && !shell.classList.contains('port-hit-near')) return;
+    smartPortHoverState = null;
+    shell.classList.remove('port-hit-near');
+    world.querySelectorAll('.image-node.port-hit-preview').forEach(el => el.classList.remove('port-hit-preview'));
+    world.querySelectorAll('.node-port.is-near').forEach(el => el.classList.remove('is-near'));
+    shell.querySelectorAll('.smart-port-hit-indicator').forEach(el => el.classList.remove('visible', 'is-active', 'no-motion'));
+}
+function suspendSmartPortHoverPreviewForViewport(){
+    smartPortViewportPreviewSuspended = true;
+    if(smartPortViewportPreviewTimer) clearTimeout(smartPortViewportPreviewTimer);
+    clearSmartPortHoverPreview();
+    smartPortViewportPreviewTimer = setTimeout(() => {
+        smartPortViewportPreviewSuspended = false;
+        smartPortViewportPreviewTimer = null;
+    }, 140);
+}
+function smartPortClampIndicatorPointToHitRadius(hit, point){
+    const centerX = Number(hit.screenX);
+    const centerY = Number(hit.screenY);
+    if(!Number.isFinite(centerX) || !Number.isFinite(centerY)) return point;
+    const radius = Math.max(1, Number(hit.hitRadius) || smartPortHitScreenRadius());
+    const dx = point.x - centerX;
+    const dy = point.y - centerY;
+    const dist = Math.hypot(dx, dy);
+    if(!Number.isFinite(dist) || dist <= radius || dist <= 0.001) return point;
+    const scale = radius / dist;
+    return {x:centerX + dx * scale, y:centerY + dy * scale};
+}
+function smartPortIndicatorPoint(hit){
+    const baseX = Number(hit.visualX) || hit.screenX;
+    const baseY = Number(hit.visualY) || hit.screenY;
+    if(hit.previewOnly || hit.mouseInsideFrame) return smartPortClampIndicatorPointToHitRadius(hit, {x:baseX, y:baseY});
+    const radius = Math.max(1, Number(hit.hitRadius) || smartPortHitScreenRadius());
+    const ratio = Math.max(0, Math.min(1, (Number(hit.dist) || 0) / radius));
+    const pull = Math.max(0.18, 1 - Math.pow(ratio, 2.2));
+    const pad = smartPortIndicatorScreenPad();
+    let x = baseX + (hit.mouseX - baseX) * pull;
+    const y = baseY + (hit.mouseY - baseY) * pull;
+    if(hit.port === 'in') x = Math.min(x, hit.frameLeft - pad);
+    else x = Math.max(x, hit.frameRight + pad);
+    return smartPortClampIndicatorPointToHitRadius(hit, {x, y});
+}
+function setSmartPortHoverPreview(preview){
+    const previousNodeId = smartPortHoverState?.nodeId || '';
+    const nodeChanged = previousNodeId && previousNodeId !== preview.nodeId;
+    const activePort = preview.activePort || '';
+    smartPortHoverState = {nodeId:preview.nodeId, port:activePort, previewOnly:!activePort};
+    if(activePort) shell.classList.add('port-hit-near');
+    else shell.classList.remove('port-hit-near');
+    world.querySelectorAll('.image-node.port-hit-preview').forEach(el => el.classList.remove('port-hit-preview'));
+    world.querySelectorAll('.node-port.is-near').forEach(el => el.classList.remove('is-near'));
+    const targetNodeEl = world.querySelector(`.image-node[data-id="${CSS.escape(preview.nodeId)}"]`);
+    targetNodeEl?.classList.add('port-hit-preview');
+    const indicators = ensureSmartPortHitIndicators();
+    const shellRect = shell.getBoundingClientRect();
+    const iconScale = smartPortIndicatorScale();
+    let suppressMotion = false;
+    preview.hits.forEach(hit => {
+        const portEl = targetNodeEl?.querySelector(`.node-port[data-port="${hit.port}"]`);
+        portEl?.classList.add('is-near');
+        const indicator = indicators[hit.port];
+        if(!indicator) return;
+        const wasVisible = indicator.classList.contains('visible');
+        if(!wasVisible || nodeChanged || indicator.dataset.nodeId !== hit.nodeId){
+            indicator.classList.add('no-motion');
+            suppressMotion = true;
+        }
+        indicator.dataset.nodeId = hit.nodeId;
+        indicator.style.setProperty('--smart-port-icon-scale', String(iconScale));
+        const point = smartPortIndicatorPoint(hit);
+        indicator.style.left = `${point.x - shellRect.left}px`;
+        indicator.style.top = `${point.y - shellRect.top}px`;
+        indicator.classList.toggle('is-active', Boolean(hit.active));
+        indicator.classList.add('visible');
+    });
+    Object.entries(indicators).forEach(([port, indicator]) => {
+        if(!preview.hits.some(hit => hit.port === port)) indicator.classList.remove('visible', 'is-active');
+    });
+    if(suppressMotion){
+        Object.values(indicators).forEach(indicator => {
+            void indicator.offsetWidth;
+            requestAnimationFrame(() => indicator.classList.remove('no-motion'));
+        });
+    }
+}
+function isSmartPortHoverPreviewBlocked(e){
+    if(portDragState || dragState || resizeState || promptResizeState || llmInstructionResizeState || promptSplitResizeState || thumbDragState || panState || selectionState || smartMinimapDrag) return true;
+    if(previewCompareDrag || panoramaState.drag || previewPanDrag || imageEditPanDrag || cropDrag) return true;
+    if(zoomPreviewState) return true;
+    return Boolean(e.target.closest?.('.composer,.smart-back,.asset-panel,.asset-toggle,.smart-log-toggle,.smart-shortcut-toggle,.smart-workflow-toggle,.log-modal,.shortcut-modal,.image-edit-modal,.preview-modal,.create-menu,.smart-minimap,.mini-x,.smart-node-floating-menu,.node-resize-handle,.thumb-item,.prompt-node-control,.prompt-node-pill,select,input,textarea,button,a'));
+}
+function updateSmartPortHoverPreview(e){
+    if(smartPortViewportPreviewSuspended){
+        clearSmartPortHoverPreview();
+        return;
+    }
+    smartPortHoverPointer = e ? {clientX:e.clientX, clientY:e.clientY, target:e.target} : smartPortHoverPointer;
+    if(isSmartPortHoverPreviewBlocked(e)){
+        clearSmartPortHoverPreview();
+        return;
+    }
+    const portPreview = smartPortPreviewFromEvent(e);
+    if(portPreview) setSmartPortHoverPreview(portPreview);
+    else clearSmartPortHoverPreview();
+}
+function refreshSmartPortHoverPreviewAfterViewport(){
+    if(smartPortViewportPreviewSuspended || !smartPortHoverPointer || portDragState) return;
+    const target = document.elementFromPoint(smartPortHoverPointer.clientX, smartPortHoverPointer.clientY) || smartPortHoverPointer.target;
+    updateSmartPortHoverPreview({...smartPortHoverPointer, target});
+}
+function clearSmartPortDragTargetPreview(){
+    shell.querySelectorAll('.smart-port-hit-indicator').forEach(el => el.classList.remove('visible', 'is-active', 'no-motion'));
+}
+function setSmartPortDragTargetPreview(hit){
+    if(!hit) return clearSmartPortDragTargetPreview();
+    const indicators = ensureSmartPortHitIndicators();
+    const indicator = indicators[hit.port];
+    if(!indicator) return;
+    const shellRect = shell.getBoundingClientRect();
+    const iconScale = smartPortIndicatorScale();
+    Object.entries(indicators).forEach(([port, el]) => {
+        if(port !== hit.port) el.classList.remove('visible', 'is-active', 'no-motion');
+    });
+    const wasVisible = indicator.classList.contains('visible');
+    if(!wasVisible || indicator.dataset.nodeId !== hit.nodeId){
+        indicator.classList.add('no-motion');
+        void indicator.offsetWidth;
+        requestAnimationFrame(() => indicator.classList.remove('no-motion'));
+    }
+    indicator.dataset.nodeId = hit.nodeId;
+    indicator.style.setProperty('--smart-port-icon-scale', String(iconScale));
+    const point = smartPortIndicatorPoint({...hit, previewOnly:false, active:true, mouseInsideFrame:false});
+    indicator.style.left = `${point.x - shellRect.left}px`;
+    indicator.style.top = `${point.y - shellRect.top}px`;
+    indicator.classList.add('visible', 'is-active');
+}
+function smartPortOppositePort(port){
+    if(port === 'out') return 'in';
+    if(port === 'in') return 'out';
+    return '';
+}
+function smartPortDragFrameHitFromEvent(e, sourceId='', sourcePort=''){
+    const radius = smartPortHitScreenRadius();
+    const preferredPort = smartPortOppositePort(sourcePort);
+    let best = null;
+    world.querySelectorAll('.image-node[data-id]').forEach(nodeEl => {
+        const nodeId = nodeEl.dataset.id || '';
+        if(!nodeId || nodeId === sourceId) return;
+        const rect = nodeEl.getBoundingClientRect();
+        if(!rect.width || !rect.height) return;
+        const inside = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+        if(inside){
+            const port = preferredPort || ((e.clientX - rect.left) < rect.width / 2 ? 'in' : 'out');
+            const hit = smartPortBuildHitFromNode(nodeEl, e, port, {excludeId:sourceId, radius, active:true});
+            if(hit){
+                hit.dist = 0;
+                hit.hitRadius = radius;
+                hit.mouseInsideFrame = true;
+                if(!best || hit.dist < best.dist) best = hit;
+            }
+            return;
+        }
+        [
+            {port:'in', x:rect.left},
+            {port:'out', x:rect.right}
+        ].forEach(candidate => {
+            if(preferredPort && candidate.port !== preferredPort) return;
+            const clampedY = Math.max(rect.top, Math.min(rect.bottom, e.clientY));
+            const dist = Math.hypot(e.clientX - candidate.x, e.clientY - clampedY);
+            if(dist > radius) return;
+            const hit = smartPortBuildHitFromNode(nodeEl, e, candidate.port, {excludeId:sourceId, radius, active:true});
+            if(!hit) return;
+            hit.dist = dist;
+            hit.hitRadius = radius;
+            hit.mouseInsideFrame = false;
+            if(!best || hit.dist < best.dist) best = hit;
+        });
+    });
+    return best;
+}
+function smartPortTargetFromEvent(e, sourceId='', sourcePort=''){
+    const hitEl = document.elementFromPoint(e.clientX, e.clientY);
+    const portEl = hitEl?.closest?.('.node-port');
+    const nodeEl = portEl?.closest?.('.image-node') || hitEl?.closest?.('.image-node');
+    const near = smartPortHitFromEvent(e, {excludeId:sourceId});
+    const frameHit = smartPortDragFrameHitFromEvent(e, sourceId, sourcePort);
+    let targetHit = null;
+    let id = '', port = '';
+    if(nodeEl && nodeEl.dataset.id && nodeEl.dataset.id !== sourceId){
+        id = nodeEl.dataset.id;
+        if(portEl){
+            port = portEl.dataset.port;
+        } else if(frameHit && frameHit.nodeId === id){
+            port = frameHit.port;
+        } else {
+            const rect = nodeEl.getBoundingClientRect();
+            port = smartPortOppositePort(sourcePort) || ((e.clientX - rect.left) < rect.width / 2 ? 'in' : 'out');
+        }
+        targetHit = (frameHit && frameHit.nodeId === id && frameHit.port === port) ? frameHit : (near && near.nodeId === id && near.port === port ? near : smartPortBuildHitFromNode(nodeEl, e, port, {active:true}));
+    }
+    if(!id){
+        targetHit = frameHit || near;
+        if(targetHit){
+            id = targetHit.nodeId;
+            port = targetHit.port;
+        }
+    }
+    return {targetId:id, targetPort:port, hit:hitEl, near, targetHit};
+}
+function beginSmartPortDrag(fromId, fromPort, e){
+    if(e.button !== 0) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation?.();
+    const p = screenToWorld(e);
+    portDragState = {
+        fromId,
+        fromPort,
+        currentWorld:p,
+        hoverTargetId:'',
+        hoverPort:'',
+        hoverHit:null,
+        moved:false
+    };
+    shell.classList.add('port-dragging');
+    capturePendingUndo();
+    ensurePortDragPathElement();
+    updatePortDragVisual();
+    return true;
+}
+
+function maybeBeginSmartPortDragFromEvent(e){
+    if(portDragState || zoomPreviewState || e.button !== 0) return false;
+    if(e.target.closest?.('.composer,.smart-back,.asset-panel,.asset-toggle,.smart-log-toggle,.smart-shortcut-toggle,.smart-workflow-toggle,.log-modal,.shortcut-modal,.image-edit-modal,.create-menu,.smart-minimap,.mini-x,.smart-node-floating-menu,.node-resize-handle,.thumb-item,.prompt-node-control,.prompt-node-pill,select,input,textarea,button,a')) return false;
+    const nearPort = smartPortHitFromEvent(e);
+    return Boolean(nearPort && beginSmartPortDrag(nearPort.nodeId, nearPort.port, e));
+}
+
 function bindPromptNodeControls(el, node){
     el.querySelectorAll('.prompt-node-control, .prompt-node-pill').forEach(control => {
         control.addEventListener('mousedown', e => e.stopPropagation());
@@ -7981,24 +8329,11 @@ function updatePortDragVisual(){
         targetNodeEl?.classList.add('port-hover');
         targetNodeEl?.querySelector(`.node-port[data-port="${portDragState.hoverPort}"]`)?.classList.add('is-active');
     }
+    if(portDragState.hoverHit) setSmartPortDragTargetPreview(portDragState.hoverHit);
+    else clearSmartPortDragTargetPreview();
 }
 function handlePortDrop(drag, e){
-    const {targetId, targetPort, hit} = (() => {
-        const hitEl = document.elementFromPoint(e.clientX, e.clientY);
-        const portEl = hitEl?.closest?.('.node-port');
-        const nodeEl = portEl?.closest?.('.image-node') || hitEl?.closest?.('.image-node');
-        let id = '', port = '';
-        if(nodeEl && nodeEl.dataset.id && nodeEl.dataset.id !== drag.fromId){
-            id = nodeEl.dataset.id;
-            if(portEl){
-                port = portEl.dataset.port;
-            } else {
-                const rect = nodeEl.getBoundingClientRect();
-                port = (e.clientX - rect.left) < rect.width / 2 ? 'in' : 'out';
-            }
-        }
-        return {targetId:id, targetPort:port, hit:hitEl};
-    })();
+    const {targetId, targetPort, hit} = smartPortTargetFromEvent(e, drag.fromId, drag.fromPort);
     if(targetId){
         const compatible = (drag.fromPort === 'out' && targetPort === 'in') || (drag.fromPort === 'in' && targetPort === 'out');
         if(!compatible){ discardPendingUndo(); render(); return; }
@@ -8326,6 +8661,8 @@ function bindNodeEvents(){
         const beginNodeDrag = e => {
             if(e.button !== 0 || e.target.closest('.mini-x, .smart-node-floating-menu, .node-resize-handle, .thumb-item, .node-port, .prompt-node-control, select, input, textarea, button')) return;
             if(e.target.closest('.prompt-node-pill, textarea:not(.prompt-node-text)')) return;
+            const nearPort = smartPortHitFromEvent(e, {onlyId:id});
+            if(nearPort && beginSmartPortDrag(id, nearPort.port, e)) return;
             e.preventDefault(); e.stopPropagation();
             window.getSelection?.()?.removeAllRanges?.();
             if(document.activeElement?.blur) document.activeElement.blur();
@@ -8347,22 +8684,7 @@ function bindNodeEvents(){
         };
         el.querySelectorAll('.node-port').forEach(port => {
             port.addEventListener('mousedown', e => {
-                if(e.button !== 0) return;
-                e.preventDefault(); e.stopPropagation();
-                const portType = port.dataset.port;
-                const p = screenToWorld(e);
-                portDragState = {
-                    fromId:id,
-                    fromPort:portType,
-                    currentWorld:p,
-                    hoverTargetId:'',
-                    hoverPort:'',
-                    moved:false
-                };
-                shell.classList.add('port-dragging');
-                capturePendingUndo();
-                ensurePortDragPathElement();
-                updatePortDragVisual();
+                beginSmartPortDrag(id, port.dataset.port, e);
             });
             port.addEventListener('click', e => { e.stopPropagation(); });
             port.addEventListener('dblclick', e => { e.stopPropagation(); });
@@ -15466,6 +15788,11 @@ shell.addEventListener('mousedown', e => {
     e.preventDefault();
     e.stopPropagation();
 }, true);
+shell.addEventListener('mousedown', e => {
+    maybeBeginSmartPortDragFromEvent(e);
+}, true);
+shell.addEventListener('mouseleave', clearSmartPortHoverPreview);
+window.addEventListener('blur', clearSmartPortHoverPreview);
 shell.addEventListener('click', e => {
     if(!zoomPreviewState) return;
     if(e.button !== 0) return;
@@ -15478,6 +15805,7 @@ shell.addEventListener('click', e => {
 }, true);
 shell.onmousedown = e => {
     if(zoomPreviewState && e.button === 0 && !e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.smart-log-toggle,.smart-shortcut-toggle,.smart-workflow-toggle,.log-modal,.shortcut-modal,.image-edit-modal,.create-menu,.smart-minimap')) return;
+    if(maybeBeginSmartPortDragFromEvent(e)) return;
     if(e.target.closest('.image-node,.composer,.smart-back,.asset-panel,.asset-toggle,.smart-log-toggle,.smart-shortcut-toggle,.smart-workflow-toggle,.log-modal,.shortcut-modal,.create-menu,.smart-minimap')) return;
     closeCreateMenu();
     if(e.button === 0 && isRKeyDown){
@@ -15551,6 +15879,7 @@ smartArrangeBtn?.addEventListener('click', e => {
 });
 window.onmousemove = e => {
     lastMouseWorld = screenToWorld(e);
+    updateSmartPortHoverPreview(e);
     if(smartMinimapDrag){
         e.preventDefault();
         centerViewportOnWorldPoint(minimapEventToWorld(e));
@@ -15561,23 +15890,15 @@ window.onmousemove = e => {
         const p = screenToWorld(e);
         portDragState.currentWorld = p;
         portDragState.moved = true;
-        const hitEl = document.elementFromPoint(e.clientX, e.clientY);
-        const portEl = hitEl?.closest?.('.node-port');
-        const nodeEl = portEl?.closest?.('.image-node') || hitEl?.closest?.('.image-node');
-        let targetId = '', targetPort = '';
-        if(nodeEl && nodeEl.dataset.id && nodeEl.dataset.id !== portDragState.fromId){
-            targetId = nodeEl.dataset.id;
-            if(portEl){
-                targetPort = portEl.dataset.port;
-            } else {
-                const rect = nodeEl.getBoundingClientRect();
-                targetPort = (e.clientX - rect.left) < rect.width / 2 ? 'in' : 'out';
-            }
+        let {targetId, targetPort, targetHit} = smartPortTargetFromEvent(e, portDragState.fromId, portDragState.fromPort);
+        let hoverHit = targetHit && targetId && targetHit.nodeId === targetId && targetHit.port === targetPort ? targetHit : null;
+        if(targetId){
             const compatible = (portDragState.fromPort === 'out' && targetPort === 'in') || (portDragState.fromPort === 'in' && targetPort === 'out');
-            if(!compatible){ targetId = ''; targetPort = ''; }
+            if(!compatible){ targetId = ''; targetPort = ''; hoverHit = null; }
         }
         portDragState.hoverTargetId = targetId;
         portDragState.hoverPort = targetPort;
+        portDragState.hoverHit = hoverHit;
         updatePortDragVisual();
         return;
     }
@@ -16005,6 +16326,7 @@ shell.addEventListener('wheel', e => {
     viewport.scale = safeScale(viewport.scale * factor);
     viewport.x = sx - before.x * viewport.scale;
     viewport.y = sy - before.y * viewport.scale;
+    suspendSmartPortHoverPreviewForViewport();
     applyViewport();
     scheduleSave();
 }, {passive:false});
