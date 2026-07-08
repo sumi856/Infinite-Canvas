@@ -698,10 +698,16 @@ function canvasAssetsForCategory(categoryId=activeCanvasAssetCategory){
     list = list.filter(canvas => (canvas.kind || 'classic') === categoryId);
     return list.sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'zh-Hans-CN', {numeric:true, sensitivity:'base'}));
 }
-function canvasAssetOpenUrl(canvas){
+function canvasAssetOpenUrl(canvas, item=null){
     if(!canvas?.id) return '';
-    const id = encodeURIComponent(canvas.id);
-    return canvas.kind === 'smart' ? `/static/smart-canvas.html?id=${id}` : `/static/canvas.html?id=${id}`;
+    const params = new URLSearchParams();
+    params.set('id', canvas.id);
+    const nodeId = item?.node_id || item?.nodeId || '';
+    const assetUrl = item?.url || '';
+    if(nodeId) params.set('node', nodeId);
+    if(assetUrl) params.set('asset', assetUrl);
+    const page = canvas.kind === 'smart' ? '/static/smart-canvas.html' : '/static/canvas.html';
+    return `${page}?${params.toString()}`;
 }
 function activeCanvasAssetCanvas(){
     if(!activeCanvasAssetCanvasId) return null;
@@ -1286,6 +1292,7 @@ function renderCanvasAssetDetail(item){
                 ${canPreview ? `<button class="asset-icon-btn" type="button" data-canvas-asset-preview="${escapeAttr(item.id)}" title="${kind === 'video' ? '预览视频' : '放大预览'}"><i data-lucide="${kind === 'video' ? 'play' : 'maximize-2'}"></i></button>` : ''}
                 <button class="asset-icon-btn" type="button" data-canvas-asset-open="${escapeAttr(item.id)}" title="打开链接"><i data-lucide="external-link"></i></button>
                 <button class="asset-icon-btn" type="button" data-canvas-asset-copy="${escapeAttr(item.id)}" title="复制链接"><i data-lucide="copy"></i></button>
+                <button class="asset-icon-btn" type="button" data-canvas-asset-source-open="${escapeAttr(item.id)}" title="\u6253\u5f00\u6765\u6e90\u753b\u5e03\u5e76\u5b9a\u4f4d\u8282\u70b9"><i data-lucide="crosshair"></i></button>
                 <button class="asset-btn primary" type="button" data-canvas-asset-download="${escapeAttr(item.id)}"><i data-lucide="download"></i><span>下载</span></button>
             </div>
         </div>
@@ -3138,6 +3145,14 @@ async function handleClick(event){
     if(target.closest?.('[data-canvas-asset-download-selected]')){ await downloadCanvasAssetItems([...selectedCanvasAssetIds]); return; }
     const canvasAssetDownload = target.closest?.('[data-canvas-asset-download]');
     if(canvasAssetDownload){ await downloadCanvasAssetItems([canvasAssetDownload.dataset.canvasAssetDownload || '']); return; }
+    const canvasAssetSourceOpen = target.closest?.('[data-canvas-asset-source-open]');
+    if(canvasAssetSourceOpen){
+        const it = findCanvasAssetItem(canvasAssetSourceOpen.dataset.canvasAssetSourceOpen || '');
+        const url = it?.canvas_id ? canvasAssetOpenUrl({id:it.canvas_id, kind:it.canvas_kind}, it) : '';
+        if(url) window.open(url, '_blank', 'noopener');
+        else setStatus('\u672a\u627e\u5230\u6765\u6e90\u753b\u5e03');
+        return;
+    }
     const canvasAssetOpen = target.closest?.('[data-canvas-asset-open]');
     if(canvasAssetOpen){ const it = findCanvasAssetItem(canvasAssetOpen.dataset.canvasAssetOpen || ''); if(it?.url) window.open(it.url, '_blank', 'noopener'); return; }
     const canvasAssetCopy = target.closest?.('[data-canvas-asset-copy]');

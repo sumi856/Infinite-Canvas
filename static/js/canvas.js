@@ -1242,6 +1242,58 @@ function safeViewportScale(value){
     const n = Number(value);
     return Number.isFinite(n) && n > 0 ? n : 1;
 }
+function requestedCanvasSourceFocus(){
+    try {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            nodeId:params.get('node') || params.get('nodeId') || '',
+            assetUrl:params.get('asset') || params.get('assetUrl') || ''
+        };
+    } catch(e) {
+        return {nodeId:'', assetUrl:''};
+    }
+}
+function nodeContainsAssetUrl(node, assetUrl){
+    if(!node || !assetUrl) return false;
+    try { return JSON.stringify(node).includes(assetUrl); } catch(e) { return false; }
+}
+function findCanvasSourceFocusNode(ref={}){
+    const nodeId = ref.nodeId || '';
+    const assetUrl = ref.assetUrl || '';
+    if(nodeId){
+        const exact = nodes.find(n => n.id === nodeId);
+        if(exact) return exact;
+    }
+    if(assetUrl) return nodes.find(n => nodeContainsAssetUrl(n, assetUrl)) || null;
+    return null;
+}
+function flashCanvasSourceNode(nodeId){
+    if(!nodeId || !nodesEl) return;
+    requestAnimationFrame(() => {
+        const el = nodesEl.querySelector(`.node[data-id="${CSS.escape(nodeId)}"]`);
+        if(!el) return;
+        el.classList.remove('source-jump-highlight');
+        void el.offsetWidth;
+        el.classList.add('source-jump-highlight');
+        setTimeout(() => el.classList.remove('source-jump-highlight'), 1800);
+    });
+}
+function focusCanvasSourceNode(ref=requestedCanvasSourceFocus()){
+    if(!ref?.nodeId && !ref?.assetUrl) return false;
+    const node = findCanvasSourceFocusNode(ref);
+    if(!node){
+        setStatus('\u672a\u627e\u5230\u6765\u6e90\u8282\u70b9\uff0c\u53ef\u80fd\u5df2\u88ab\u5220\u9664\u6216\u53ea\u5269\u5386\u53f2\u8bb0\u5f55');
+        return false;
+    }
+    selected.clear();
+    selected.add(node.id);
+    const rect = estimatedNodeRect(node);
+    centerViewportOnWorldPoint({x:rect.x + rect.w / 2, y:rect.y + rect.h / 2});
+    render();
+    flashCanvasSourceNode(node.id);
+    setStatus('\u5df2\u5b9a\u4f4d\u5230\u6765\u6e90\u8282\u70b9');
+    return true;
+}
 function fitAllNodesViewport(){
     const rect = board.getBoundingClientRect();
     if(!nodes.length){
@@ -2030,9 +2082,10 @@ async function openCanvas(id){
         setCanvasMode(true);
         renderCanvasList();
         render();
+        const didFocusSourceNode = focusCanvasSourceNode();
         resumeCanvasImageTasks();
         startCanvasRemotePolling();
-        setStatus('Ready');
+        if(!didFocusSourceNode) setStatus('Ready');
     } catch(e) {
         setStatus(tr('canvas.openFailed'));
         console.error(e);

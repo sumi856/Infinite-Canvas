@@ -1938,6 +1938,56 @@ function nodeRect(node){
     const layout = imageLayout(node.images || [], nodeScale(node), node);
     return {x:node.x || 0, y:node.y || 0, width:layout.width, height:layout.height};
 }
+function requestedSmartSourceFocus(){
+    return {
+        nodeId:params.get('node') || params.get('nodeId') || '',
+        assetUrl:params.get('asset') || params.get('assetUrl') || ''
+    };
+}
+function smartNodeContainsAssetUrl(node, assetUrl){
+    if(!node || !assetUrl) return false;
+    try { return JSON.stringify(node).includes(assetUrl); } catch(e) { return false; }
+}
+function findSmartSourceFocusNode(ref={}){
+    const nodeId = ref.nodeId || '';
+    const assetUrl = ref.assetUrl || '';
+    if(nodeId){
+        const exact = nodes.find(n => n.id === nodeId);
+        if(exact) return exact;
+    }
+    if(assetUrl) return nodes.find(n => smartNodeContainsAssetUrl(n, assetUrl)) || null;
+    return null;
+}
+function flashSmartSourceNode(nodeId){
+    if(!nodeId || !world) return;
+    requestAnimationFrame(() => {
+        const el = world.querySelector(`.image-node[data-id="${CSS.escape(nodeId)}"]`);
+        if(!el) return;
+        el.classList.remove('source-jump-highlight');
+        void el.offsetWidth;
+        el.classList.add('source-jump-highlight');
+        setTimeout(() => el.classList.remove('source-jump-highlight'), 1800);
+    });
+}
+function focusSmartSourceNode(ref=requestedSmartSourceFocus()){
+    if(!ref?.nodeId && !ref?.assetUrl) return false;
+    const node = findSmartSourceFocusNode(ref);
+    if(!node){
+        toast('\u672a\u627e\u5230\u6765\u6e90\u8282\u70b9\uff0c\u53ef\u80fd\u5df2\u88ab\u5220\u9664\u6216\u53ea\u5269\u5386\u53f2\u8bb0\u5f55');
+        return false;
+    }
+    selectedId = node.id;
+    selectedIds = [];
+    selectedImage = {nodeId:'', index:-1};
+    const rect = nodeRect(node);
+    viewport.x = shell.clientWidth / 2 - (rect.x + rect.width / 2) * viewport.scale;
+    viewport.y = shell.clientHeight / 2 - (rect.y + rect.height / 2) * viewport.scale;
+    applyViewport();
+    render();
+    flashSmartSourceNode(node.id);
+    toast('\u5df2\u5b9a\u4f4d\u5230\u6765\u6e90\u8282\u70b9');
+    return true;
+}
 function connectedSmartClusterIds(seedId){
     const ids = new Set(nodes.map(n => n.id));
     if(!ids.has(seedId)) return [];
@@ -5793,6 +5843,7 @@ async function loadCanvas(){
         updateProviderModels();
         applyViewport();
         render();
+        focusSmartSourceNode();
         if(cleanedDetachedInputs || cleanedCompletedState || recoveredLoopOutputs || hiddenCompletedTimers) scheduleSave();
         resumeSmartPendingTasks();
         resumeJimengPendingNodes();

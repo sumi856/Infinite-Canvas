@@ -1431,3 +1431,18 @@ html[data-studio-scale="off"].studio-scale-managed .toolbar.scale-expanded .tool
         margin-left:0;
     }
 }
+.node.source-jump-highlight { animation:sourceJumpPulse 1.6s ease-out 1; }
+@keyframes sourceJumpPulse {
+    0% { box-shadow:0 0 0 0 rgba(37,99,235,.55), 0 16px 42px var(--shadow); }
+    45% { box-shadow:0 0 0 12px rgba(37,99,235,.18), 0 18px 48px var(--shadow); }
+    100% { box-shadow:0 0 0 22px rgba(37,99,235,0), 0 16px 42px var(--shadow); }
+}
+html.theme-dark .node.source-jump-highlight,
+body.theme-dark .node.source-jump-highlight,
+html.studio-theme-dark .node.source-jump-highlight,
+body.studio-theme-dark .node.source-jump-highlight { animation:sourceJumpPulseDark 1.6s ease-out 1; }
+@keyframes sourceJumpPulseDark {
+    0% { box-shadow:0 0 0 0 rgba(56,189,248,.9), 0 16px 42px var(--shadow); }
+    45% { box-shadow:0 0 0 12px rgba(56,189,248,.34), 0 0 28px rgba(56,189,248,.42), 0 18px 48px var(--shadow); }
+    100% { box-shadow:0 0 0 22px rgba(56,189,248,0), 0 16px 42px var(--shadow); }
+}
