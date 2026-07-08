@@ -3281,6 +3281,17 @@ class CanvasAssetDownloadRequest(BaseModel):
     items: List[Dict[str, Any]] = []
     filename: str = "canvas-output-images.zip"
 
+class CanvasAssetCleanupRequest(BaseModel):
+    dry_run: bool = True
+
+class CanvasAssetReferenceRemoveRequest(BaseModel):
+    canvas_id: str = ""
+    node_id: str = ""
+    url: str = ""
+
+class CanvasHiddenReferenceCleanupRequest(BaseModel):
+    dry_run: bool = True
+
 class CanvasWorkflowExportRequest(BaseModel):
     nodes: List[Dict[str, Any]] = []
     connections: List[Dict[str, Any]] = []
@@ -4007,11 +4018,44 @@ def canvas_node_title(node):
         return ""
     return str(node.get("title") or node.get("name") or node.get("label") or node.get("type") or "节点")[:120]
 
+def canvas_asset_reference_priority(item):
+    """Lower number means a better representative for the same canvas+asset URL."""
+    source = str(item.get("source_path") or "")
+    node_type = str(item.get("node_type") or "").lower()
+    # generatedOutputs is a generator-side cache/result record. If the same file is also
+    # referenced by a real output/image node, show the visible node instead so the UI
+    # does not mark an actually visible asset as a yellow hidden-generated reference.
+    if source.startswith("generatedOutputs") or ".generatedOutputs" in source:
+        return 80
+    # Output/image media containers are closest to what the user can see on the canvas.
+    if node_type in {"output", "image", "video", "audio", "smart-image"}:
+        return 10
+    if source.startswith("images") or ".images" in source:
+        return 12
+    if source in {"url", "src", "path", "uri"} or source.endswith(".url") or source.endswith(".src"):
+        return 20
+    return 40
+
+
+def better_canvas_asset_reference(current, candidate):
+    if not current:
+        return candidate
+    cur_priority = canvas_asset_reference_priority(current)
+    next_priority = canvas_asset_reference_priority(candidate)
+    if next_priority != cur_priority:
+        return candidate if next_priority < cur_priority else current
+    # Prefer a concrete node id/title when priority ties.
+    if not current.get("node_id") and candidate.get("node_id"):
+        return candidate
+    if not current.get("node_title") and candidate.get("node_title"):
+        return candidate
+    return current
+
+
 def extract_canvas_assets(canvas):
     record = canvas_record(canvas)
     canvas_id = str(record.get("id") or "")
-    items = []
-    seen = set()
+    items_by_url = {}
     nodes = canvas.get("nodes") if isinstance(canvas.get("nodes"), list) else []
     for node_index, node in enumerate(nodes):
         if not isinstance(node, dict):
@@ -4019,21 +4063,17 @@ def extract_canvas_assets(canvas):
         node_id = str(node.get("id") or f"node_{node_index}")
         node_title = canvas_node_title(node)
         for field_path, raw, url in iter_canvas_asset_values(node):
-            dedupe_key = url
-            if dedupe_key in seen:
-                continue
-            seen.add(dedupe_key)
             kind = canvas_asset_kind(raw, url)
             if kind not in {"image", "video", "audio", "text"}:
                 continue
-            fallback = f"{record.get('title') or 'canvas'}-{len(items) + 1}"
+            fallback = f"{record.get('title') or 'canvas'}-{len(items_by_url) + 1}"
             item = {
                 "id": hashlib.sha1(f"{canvas_id}:{url}".encode("utf-8")).hexdigest()[:24],
                 "url": url,
                 "name": canvas_asset_name(raw, url, fallback),
                 "kind": kind,
                 "canvas_id": canvas_id,
-                "canvas_title": record.get("title") or "未命名画布",
+                "canvas_title": record.get("title") or "\u672a\u547d\u540d\u753b\u5e03",
                 "canvas_kind": record.get("kind") or "classic",
                 "canvas_icon": record.get("icon") or "layers",
                 "canvas_owner": record.get("owner") or "",
@@ -4050,8 +4090,8 @@ def extract_canvas_assets(canvas):
                 for key in ("natural_w", "natural_h", "width", "height", "size", "duration", "runMs"):
                     if raw.get(key) is not None:
                         item[key] = raw.get(key)
-            items.append(item)
-    return items
+            items_by_url[url] = better_canvas_asset_reference(items_by_url.get(url), item)
+    return list(items_by_url.values())
 
 def canvas_assets_index():
     canvases = []
@@ -4087,6 +4127,377 @@ def canvas_assets_index():
         {"id": "classic", "name": "普通画布", "count": item_counts.get("classic", 0), "canvas_count": canvas_counts.get("classic", 0)},
     ]
     return {"categories": categories, "canvases": canvases, "items": items}
+
+CANVAS_MANAGED_ASSET_REF_RE = re.compile(r"(?:https?://[^\s\"'<>]+)?/assets/(?:input|output)/[^\s\"'<>),\]}]+")
+API_VIEW_REF_RE = re.compile(r"(?:https?://[^\s\"'<>]+)?/api/view\?[^\s\"'<>]+")
+CLEANUP_ASSET_ROOTS = {
+    "input": OUTPUT_INPUT_DIR,
+    "output": OUTPUT_OUTPUT_DIR,
+}
+
+def list_output_cleanup_candidates():
+    candidates = []
+    for bucket, root_dir in CLEANUP_ASSET_ROOTS.items():
+        root = os.path.abspath(root_dir)
+        if not os.path.isdir(root):
+            continue
+        for dirpath, _, filenames in os.walk(root):
+            for name in filenames:
+                path = os.path.abspath(os.path.join(dirpath, name))
+                try:
+                    if os.path.commonpath([root, path]) != root or not os.path.isfile(path):
+                        continue
+                    stat = os.stat(path)
+                except Exception:
+                    continue
+                rel = os.path.relpath(path, root).replace("\\", "/")
+                candidates.append({
+                    "path": path,
+                    "bucket": bucket,
+                    "rel": rel,
+                    "name": os.path.basename(path),
+                    "url": f"/assets/{bucket}/" + urllib.parse.quote(rel, safe="/"),
+                    "size": int(stat.st_size),
+                    "mtime": int(stat.st_mtime * 1000),
+                })
+    candidates.sort(key=lambda item: (item["bucket"], item["rel"].lower(), item["mtime"]))
+    return candidates
+
+def output_cleanup_path_from_assets_rel(bucket: str, rel: str):
+    bucket = str(bucket or "").strip().lower()
+    root_dir = CLEANUP_ASSET_ROOTS.get(bucket)
+    if not root_dir:
+        return None
+    rel = urllib.parse.unquote(str(rel or "")).replace("\\", "/").lstrip("/")
+    if not rel:
+        return None
+    root = os.path.abspath(root_dir)
+    path = os.path.abspath(os.path.join(root, rel))
+    try:
+        if os.path.commonpath([root, path]) != root or not os.path.isfile(path):
+            return None
+    except Exception:
+        return None
+    return path
+
+def collect_output_refs_from_text(text: str, candidate_by_bucket_name: Dict[Tuple[str, str], str]) -> set:
+    refs = set()
+    raw = str(text or "")
+    if not raw:
+        return refs
+    for match in CANVAS_MANAGED_ASSET_REF_RE.finditer(raw):
+        token = match.group(0).rstrip(".,;:!?)]}")
+        path_part = urllib.parse.urlsplit(token).path
+        parts = path_part.split("/", 3)
+        if len(parts) < 4 or parts[1] != "assets" or parts[2] not in CLEANUP_ASSET_ROOTS:
+            continue
+        path = output_cleanup_path_from_assets_rel(parts[2], parts[3])
+        if path:
+            refs.add(path)
+    for match in API_VIEW_REF_RE.finditer(raw):
+        token = match.group(0).rstrip(".,;:!?)]}")
+        parsed = urllib.parse.urlsplit(token)
+        query = urllib.parse.parse_qs(parsed.query)
+        bucket = (query.get("type") or [""])[0]
+        if bucket in CLEANUP_ASSET_ROOTS:
+            filename = os.path.basename((query.get("filename") or [""])[0])
+            path = candidate_by_bucket_name.get((bucket, filename))
+            if path:
+                refs.add(path)
+    return refs
+
+def iter_reference_strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for child in value.values():
+            yield from iter_reference_strings(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from iter_reference_strings(child)
+
+def output_cleanup_add_refs_from_payload(payload, source_key: str, refs_by_source: Dict[str, set], source_texts: Dict[str, list], candidate_by_bucket_name: Dict[Tuple[str, str], str]):
+    if payload is None:
+        return
+    bucket = refs_by_source.setdefault(source_key, set())
+    texts = source_texts.setdefault(source_key, [])
+    for value in iter_reference_strings(payload):
+        text = str(value or "")
+        if not text:
+            continue
+        texts.append(text)
+        bucket.update(collect_output_refs_from_text(text, candidate_by_bucket_name))
+
+def output_cleanup_reference_index(candidates: List[Dict[str, Any]]):
+    candidate_by_bucket_name = {(item["bucket"], item["name"]): item["path"] for item in candidates}
+    refs_by_source = {"canvases": set(), "history": set(), "asset_library": set()}
+    source_texts = {"canvases": [], "history": [], "asset_library": []}
+    stats = {"canvas_files": 0, "history_loaded": False, "asset_library_loaded": False}
+    cleanup_expired_canvas_trash()
+    if os.path.isdir(CANVAS_DIR):
+        for filename in os.listdir(CANVAS_DIR):
+            if not filename.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(CANVAS_DIR, filename), "r", encoding="utf-8") as f:
+                    canvas = json.load(f)
+            except Exception:
+                continue
+            if canvas.get("deleted_at"):
+                continue
+            stats["canvas_files"] += 1
+            output_cleanup_add_refs_from_payload(canvas, "canvases", refs_by_source, source_texts, candidate_by_bucket_name)
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with HISTORY_LOCK:
+                with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                    history = json.load(f)
+            stats["history_loaded"] = True
+            output_cleanup_add_refs_from_payload(history, "history", refs_by_source, source_texts, candidate_by_bucket_name)
+        except Exception:
+            pass
+    try:
+        library = load_asset_library()
+        stats["asset_library_loaded"] = True
+        output_cleanup_add_refs_from_payload(library, "asset_library", refs_by_source, source_texts, candidate_by_bucket_name)
+    except Exception:
+        pass
+    # Conservative fallback: some records keep only filename + type=input/output.
+    # If a candidate filename appears in source text, treat it as referenced.
+    for source_key, texts in source_texts.items():
+        haystack = "\n".join(texts)
+        if not haystack:
+            continue
+        decoded_haystack = urllib.parse.unquote(haystack)
+        bucket = refs_by_source.setdefault(source_key, set())
+        for item in candidates:
+            name = item["name"]
+            if name and (name in decoded_haystack or urllib.parse.quote(name) in haystack):
+                bucket.add(item["path"])
+    referenced = set()
+    for refs in refs_by_source.values():
+        referenced.update(refs)
+    stats["referenced_by_source"] = {key: len(value) for key, value in refs_by_source.items()}
+    stats["referenced_total"] = len(referenced)
+    stats["candidate_by_bucket"] = {
+        bucket: sum(1 for item in candidates if item.get("bucket") == bucket)
+        for bucket in CLEANUP_ASSET_ROOTS
+    }
+    return referenced, refs_by_source, stats
+
+
+def normalized_canvas_asset_ref_url(url: str):
+    text = str(url or "").strip()
+    if not text:
+        return ""
+    try:
+        path = urllib.parse.urlsplit(text).path or text
+    except Exception:
+        path = text
+    return urllib.parse.unquote(path).replace("\\", "/").strip()
+
+def canvas_asset_ref_matches(value, target_url: str):
+    target = normalized_canvas_asset_ref_url(target_url)
+    if not target:
+        return False
+    current = normalized_canvas_asset_ref_url(canvas_asset_url_value(value) or value)
+    return bool(current and current == target)
+
+def remove_canvas_asset_ref_items(items, target_url: str):
+    if not isinstance(items, list):
+        return 0
+    kept = []
+    removed = 0
+    for item in items:
+        if canvas_asset_ref_matches(item, target_url):
+            removed += 1
+            continue
+        kept.append(item)
+    if removed:
+        items[:] = kept
+    return removed
+
+def remove_canvas_asset_reference_from_canvas(canvas_id: str, node_id: str, url: str):
+    canvas_id = str(canvas_id or "").strip()
+    node_id = str(node_id or "").strip()
+    url = str(url or "").strip()
+    if not canvas_id or not url:
+        raise HTTPException(status_code=400, detail="缺少画布 ID 或素材 URL")
+    canvas = load_canvas(canvas_id)
+    if canvas.get("deleted_at"):
+        raise HTTPException(status_code=400, detail="画布已在回收站中")
+    removed = {"generatedOutputs": 0, "logs": 0}
+    nodes = canvas.get("nodes") if isinstance(canvas.get("nodes"), list) else []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        if node_id and str(node.get("id") or "") != node_id:
+            continue
+        removed["generatedOutputs"] += remove_canvas_asset_ref_items(node.get("generatedOutputs"), url)
+    logs = canvas.get("logs") if isinstance(canvas.get("logs"), list) else []
+    for log in logs:
+        if not isinstance(log, dict):
+            continue
+        # 生成日志不会在画布上直接显示，但会让清理器认为文件仍被引用；移除画布残留引用时一并清掉。
+        for key in ("outputs", "refs"):
+            removed["logs"] += remove_canvas_asset_ref_items(log.get(key), url)
+    total = sum(removed.values())
+    if total:
+        save_canvas(canvas)
+    return {"removed": total, "by_field": removed, "canvas": canvas_record(canvas), "updated_at": canvas.get("updated_at", 0)}
+
+
+def cleanup_managed_asset_info_from_url(url: str):
+    text = str(url or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = urllib.parse.urlsplit(text)
+        path_part = parsed.path or text
+    except Exception:
+        path_part = text
+    path_part = urllib.parse.unquote(path_part).replace("\\", "/")
+    parts = path_part.split("/", 3)
+    if len(parts) < 4 or parts[1] != "assets" or parts[2] not in CLEANUP_ASSET_ROOTS:
+        return None
+    bucket = parts[2]
+    rel = parts[3].lstrip("/")
+    path = output_cleanup_path_from_assets_rel(bucket, rel)
+    size = 0
+    if path:
+        try:
+            size = int(os.path.getsize(path))
+        except Exception:
+            size = 0
+    return {"bucket": bucket, "rel": rel, "path": path, "name": os.path.basename(rel), "size": size}
+
+def cleanup_hidden_generated_output_refs(dry_run: bool = True):
+    cleanup_expired_canvas_trash()
+    total_refs = 0
+    total_logs = 0
+    changed_canvases = 0
+    bytes_total = 0
+    items = []
+    if not os.path.isdir(CANVAS_DIR):
+        return {"dry_run": bool(dry_run), "refs": 0, "logs": 0, "canvases": 0, "bytes": 0, "items": []}
+    for filename in os.listdir(CANVAS_DIR):
+        if not filename.endswith(".json"):
+            continue
+        path = os.path.join(CANVAS_DIR, filename)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                canvas = json.load(f)
+        except Exception:
+            continue
+        if not isinstance(canvas, dict) or canvas.get("deleted_at"):
+            continue
+        record = canvas_record(canvas)
+        connections = canvas.get("connections") if isinstance(canvas.get("connections"), list) else []
+        outgoing = {str(conn.get("from") or "") for conn in connections if isinstance(conn, dict) and conn.get("from")}
+        nodes = canvas.get("nodes") if isinstance(canvas.get("nodes"), list) else []
+        urls_to_remove = set()
+        canvas_refs = 0
+        for node_index, node in enumerate(nodes):
+            if not isinstance(node, dict):
+                continue
+            node_id = str(node.get("id") or f"node_{node_index}")
+            if node_id in outgoing:
+                # 仍连接到下游的 generatedOutputs 可能作为隐式输入使用，不能自动清。
+                continue
+            outputs = node.get("generatedOutputs")
+            if not isinstance(outputs, list) or not outputs:
+                continue
+            keep = []
+            removed_here = []
+            for output_index, output in enumerate(outputs):
+                url = canvas_asset_url_value(output)
+                info = cleanup_managed_asset_info_from_url(url)
+                if not info:
+                    keep.append(output)
+                    continue
+                total_refs += 1
+                canvas_refs += 1
+                bytes_total += int(info.get("size") or 0)
+                urls_to_remove.add(normalized_canvas_asset_ref_url(url))
+                removed_here.append(output)
+                if len(items) < 200:
+                    items.append({
+                        "canvas_id": record.get("id") or "",
+                        "canvas_title": record.get("title") or "未命名画布",
+                        "node_id": node_id,
+                        "node_title": canvas_node_title(node),
+                        "node_type": str(node.get("type") or ""),
+                        "source_path": f"generatedOutputs[{output_index}]",
+                        "url": url,
+                        "bucket": info.get("bucket") or "",
+                        "name": info.get("name") or filename_from_media_url(url, "asset"),
+                        "size": int(info.get("size") or 0),
+                    })
+            if not dry_run and removed_here:
+                node["generatedOutputs"] = keep
+        if urls_to_remove:
+            logs = canvas.get("logs") if isinstance(canvas.get("logs"), list) else []
+            for log in logs:
+                if not isinstance(log, dict):
+                    continue
+                for key in ("outputs", "refs"):
+                    arr = log.get(key)
+                    if not isinstance(arr, list):
+                        continue
+                    kept = []
+                    for value in arr:
+                        url = canvas_asset_url_value(value)
+                        if normalized_canvas_asset_ref_url(url) in urls_to_remove:
+                            total_logs += 1
+                            if not dry_run:
+                                continue
+                        kept.append(value)
+                    if not dry_run and len(kept) != len(arr):
+                        log[key] = kept
+            if not dry_run and canvas_refs:
+                save_canvas(canvas)
+                changed_canvases += 1
+            elif dry_run and canvas_refs:
+                changed_canvases += 1
+    return {
+        "dry_run": bool(dry_run),
+        "refs": total_refs,
+        "logs": total_logs,
+        "canvases": changed_canvases,
+        "bytes": bytes_total,
+        "items": items,
+    }
+
+def cleanup_unreferenced_output_assets(dry_run: bool = True):
+    candidates = list_output_cleanup_candidates()
+    referenced, refs_by_source, stats = output_cleanup_reference_index(candidates)
+    stale = [item for item in candidates if item["path"] not in referenced]
+    deleted = []
+    errors = []
+    if not dry_run:
+        for item in stale:
+            path = item["path"]
+            root = os.path.abspath(CLEANUP_ASSET_ROOTS.get(item.get("bucket"), ""))
+            try:
+                if not root or os.path.commonpath([root, path]) != root or not os.path.isfile(path):
+                    continue
+                os.remove(path)
+                deleted.append(item)
+            except Exception as exc:
+                errors.append({"name": item.get("name") or os.path.basename(path), "bucket": item.get("bucket") or "", "error": str(exc)})
+    target_items = stale if dry_run else deleted
+    total_bytes = sum(int(item.get("size") or 0) for item in target_items)
+    return {
+        "dry_run": bool(dry_run),
+        "candidates": len(candidates),
+        "referenced": len(referenced),
+        "stale": len(stale),
+        "deleted": len(deleted),
+        "bytes": total_bytes,
+        "errors": errors,
+        "items": [{k: item[k] for k in ("bucket", "name", "url", "size", "mtime") if k in item} for item in target_items[:200]],
+        "stats": stats,
+    }
 
 def display_title(text):
     title = re.sub(r"\s+", " ", text or "").strip()
@@ -14864,6 +15275,18 @@ async def check_canvas_assets(payload: CanvasAssetCheckRequest):
         else:
             result[text] = True
     return {"exists": result}
+
+@app.post("/api/canvas-assets/cleanup-output")
+async def cleanup_canvas_output_assets(payload: CanvasAssetCleanupRequest):
+    return await asyncio.to_thread(cleanup_unreferenced_output_assets, bool(payload.dry_run))
+
+@app.post("/api/canvas-assets/remove-reference")
+async def remove_canvas_asset_reference(payload: CanvasAssetReferenceRemoveRequest):
+    return await asyncio.to_thread(remove_canvas_asset_reference_from_canvas, payload.canvas_id, payload.node_id, payload.url)
+
+@app.post("/api/canvas-assets/cleanup-hidden-generated-refs")
+async def cleanup_canvas_hidden_generated_refs(payload: CanvasHiddenReferenceCleanupRequest):
+    return await asyncio.to_thread(cleanup_hidden_generated_output_refs, bool(payload.dry_run))
 
 @app.post("/api/canvas-assets/download")
 async def download_canvas_assets(payload: CanvasAssetDownloadRequest):

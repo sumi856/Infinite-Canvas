@@ -106,6 +106,7 @@ let selectedCanvasAssetIds = new Set();
 let canvasAssetQuery = '';
 let canvasAssetSort = 'canvas_asc';
 let canvasAssetManageMode = false;
+let outputCleanupBusy = false;
 let searchCompositionActive = false;
 let searchRenderTimer = null;
 let lastSearchCompositionEndAt = 0;
@@ -1029,6 +1030,59 @@ async function refreshCanvasAssets(){
         setStatus(err.message || '刷新画布资产失败');
     }
 }
+async function cleanupCanvasOutputAssets(){
+    if(outputCleanupBusy) return;
+    outputCleanupBusy = true;
+    render();
+    let hiddenRemoved = 0;
+    try {
+        setStatus('\u6b63\u5728\u626b\u63cf\u9690\u85cf\u751f\u6210\u7ed3\u679c\u5f15\u7528...');
+        const hiddenPreview = await apiJson('/api/canvas-assets/cleanup-hidden-generated-refs', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({dry_run:true})
+        });
+        const hiddenRefs = Number(hiddenPreview.refs || 0);
+        if(hiddenRefs){
+            setStatus(`\u6b63\u5728\u79fb\u9664 ${hiddenRefs} \u4e2a\u9690\u85cf\u751f\u6210\u7ed3\u679c\u5f15\u7528...`);
+            const hiddenResult = await apiJson('/api/canvas-assets/cleanup-hidden-generated-refs', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({dry_run:false})
+            });
+            hiddenRemoved = Number(hiddenResult.refs || 0);
+        }
+
+        setStatus('\u6b63\u5728\u626b\u63cf assets/input \u548c assets/output \u672a\u5f15\u7528\u6587\u4ef6...');
+        const preview = await apiJson('/api/canvas-assets/cleanup-output', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({dry_run:true})
+        });
+        const stale = Number(preview.stale || 0);
+        if(!stale){
+            await refreshCanvasAssets();
+            setStatus(`\u7d20\u6750\u6e05\u7406\u5b8c\u6210${hiddenRemoved ? `\uff0c\u5df2\u79fb\u9664 ${hiddenRemoved} \u4e2a\u9690\u85cf\u5f15\u7528` : ''}\uff0c\u6ca1\u6709\u53d1\u73b0\u53ef\u5220\u9664\u6587\u4ef6\uff1b\u5df2\u68c0\u67e5 ${Number(preview.candidates || 0)} \u4e2a\u6587\u4ef6`);
+            return;
+        }
+
+        setStatus(`\u6b63\u5728\u5220\u9664 ${stale} \u4e2a\u672a\u5f15\u7528\u6587\u4ef6...`);
+        const result = await apiJson('/api/canvas-assets/cleanup-output', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({dry_run:false})
+        });
+        await refreshCanvasAssets();
+        const deleted = Number(result.deleted || 0);
+        const errorCount = Array.isArray(result.errors) ? result.errors.length : 0;
+        setStatus(`\u7d20\u6750\u6e05\u7406\u5b8c\u6210${hiddenRemoved ? `\uff0c\u5df2\u79fb\u9664 ${hiddenRemoved} \u4e2a\u9690\u85cf\u5f15\u7528` : ''}\uff0c\u5df2\u5220\u9664 ${deleted} \u4e2a\u6587\u4ef6\uff0c\u91ca\u653e ${formatFileSize(Number(result.bytes || 0))}${errorCount ? `\uff0c${errorCount} \u4e2a\u5931\u8d25` : ''}`);
+    } catch(err) {
+        setStatus(err.message || '\u7d20\u6750\u6e05\u7406\u5931\u8d25');
+    } finally {
+        outputCleanupBusy = false;
+        render();
+    }
+}
 async function loadAll(){
     setStatus('加载中...');
     const [assetData, promptData, providerData, canvasAssetData] = await Promise.all([
@@ -1135,6 +1189,7 @@ function renderCanvasAssetsManager(){
                 </div>
                 <div class="asset-tools">
                     <button class="asset-btn" type="button" data-canvas-asset-refresh title="重新读取画布中的图片、视频、音频资源"><i data-lucide="refresh-cw"></i><span>刷新资源</span></button>
+                    <button class="asset-btn danger" type="button" data-canvas-output-cleanup ${outputCleanupBusy ? 'disabled' : ''} title="\u5220\u9664 assets/input \u4e0e assets/output \u4e2d\u672a\u88ab\u753b\u5e03\u3001\u5386\u53f2\u3001\u7d20\u6750\u5e93\u7d22\u5f15\u5f15\u7528\u7684\u6587\u4ef6"><i data-lucide="${outputCleanupBusy ? 'loader-2' : 'trash-2'}"></i><span>${outputCleanupBusy ? '\u6e05\u7406\u4e2d' : '\u7d20\u6750\u6e05\u7406'}</span></button>
                     <label class="asset-search-wrap"><i data-lucide="search"></i><input id="canvasAssetSearch" class="asset-search" type="search" value="${escapeAttr(canvasAssetQuery)}" placeholder="搜索画布资产"></label>
                     <select id="canvasAssetSort" class="manage-select canvas-sort-select" title="排序方法">
                         <option value="canvas_asc" ${canvasAssetSort === 'canvas_asc' ? 'selected' : ''}>画布名称</option>
@@ -3077,6 +3132,7 @@ async function handleClick(event){
         return;
     }
     if(target.closest?.('[data-canvas-asset-refresh]')){ await refreshCanvasAssets(); return; }
+    if(target.closest?.('[data-canvas-output-cleanup]')){ await cleanupCanvasOutputAssets(); return; }
     if(target.closest?.('[data-canvas-asset-select-all]')){ currentCanvasAssetItems().forEach(item => selectedCanvasAssetIds.add(item.id)); render(); return; }
     if(target.closest?.('[data-canvas-asset-clear-selection]')){ selectedCanvasAssetIds.clear(); render(); return; }
     if(target.closest?.('[data-canvas-asset-download-selected]')){ await downloadCanvasAssetItems([...selectedCanvasAssetIds]); return; }
